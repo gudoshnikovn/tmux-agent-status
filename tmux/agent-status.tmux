@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TPM entry point for tmux-claude-status.
+# TPM entry point for tmux-agent-status.
 
 CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PLUGIN_ROOT="$(dirname "$CURRENT_DIR")"

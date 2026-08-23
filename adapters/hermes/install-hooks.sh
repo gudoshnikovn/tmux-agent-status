@@ -36,7 +36,7 @@ CONFIG_FILE="${HERMES_CONFIG_FILE:-$HOME/.hermes/config.yaml}"
 
 print_manual_instructions() {
     cat >&2 <<EOF
-tmux-claude-status: could not automatically edit $CONFIG_FILE
+tmux-agent-status: could not automatically edit $CONFIG_FILE
 (need python3 with pyyaml, or yq, on PATH). Add this to its hooks:
 block manually:
 

@@ -13,7 +13,7 @@ HOOK_SCRIPT="$PLUGIN_DIR/core/agent-status.sh"
 SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
 
 if ! command -v jq >/dev/null 2>&1; then
-    echo "tmux-claude-status: jq not found, skipping Claude Code hook install." >&2
+    echo "tmux-agent-status: jq not found, skipping Claude Code hook install." >&2
     echo "Install jq (brew install jq) and re-source your tmux config, or add" >&2
     echo "hooks manually that call: $HOOK_SCRIPT <working|waiting|done|clear> --tool claude-code" >&2
     exit 0

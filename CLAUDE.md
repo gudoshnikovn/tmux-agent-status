@@ -1,4 +1,4 @@
-# tmux-claude-status
+# tmux-agent-status
 
 tmux plugin: tracks what the AI coding agent (Claude Code, Hermes, ...)
 running in each pane is doing (working / waiting for you / idle), and
@@ -441,8 +441,8 @@ ever added to any of them.
 All adapter scripts and `agent-status.tmux` resolve their own directory
 with `cd -P ... && pwd -P` (physical path, symlinks resolved), **not**
 plain `cd && pwd`. This plugin is typically symlinked into
-`~/.tmux/plugins/tmux-claude-status` for TPM while the actual repo
-lives elsewhere (e.g. `~/Programming/tmux-claude-status`). With a
+`~/.tmux/plugins/tmux-agent-status` for TPM while the actual repo
+lives elsewhere (e.g. `~/Programming/tmux-agent-status`). With a
 logical (non-`-P`) resolution, invoking a script via the symlink vs.
 the real path produces two different absolute path strings for the
 same file — which broke `install-hooks.sh`'s dedup (it registers hooks
@@ -534,11 +534,16 @@ tmux show-option -p -t $TMUX_PANE @agent_status   # confirm empty
 
 ## Known limitations / not-yet-done
 
-- Not yet published anywhere — installed locally via a symlink into
-  `~/.tmux/plugins/`, not through TPM's `@plugin 'user/repo'` git-clone
-  flow, since it isn't on GitHub. Distribution (README polish, license,
-  actually pushing it, switching the user's `.tmux.conf` to the normal
-  `@plugin` line) is intentionally deferred — ask before doing it.
+- Published at `https://github.com/gudoshnikovn/tmux-agent-status` (MIT
+  license). Note the user's own git remote for this repo uses a
+  personal SSH host alias (`git@github.gudoshnikovn:...`, configured in
+  their `~/.ssh/config` for multi-account auth) — that's local to their
+  machine, not something to put in user-facing docs; anyone else clones
+  via the normal `github.com` host. The user's own `.tmux.conf` still
+  loads the plugin via a local symlink
+  (`~/.tmux/plugins/tmux-agent-status` -> the working repo clone), not
+  TPM's `@plugin 'gudoshnikovn/tmux-agent-status'` git-clone flow —
+  switching to that is a separate step, ask before doing it.
 - The reference PDFs (`hooks_docs_claude.pdf`, `EventHooks_Hermes.pdf`)
   used to derive the event tables above are deliberately not tracked in
   this repo (kept local, `.gitignore`d) — re-fetch the current docs

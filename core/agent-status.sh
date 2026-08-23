@@ -112,7 +112,7 @@ if [ "$notify_enabled" != "off" ] && [ "$status" != "$prev_status" ] && { [ "$st
         # Escape backslashes/quotes - session/window/pane names are
         # user-controlled and get embedded in an AppleScript string.
         safe_location="$(printf '%s' "$location" | sed 's/\\/\\\\/g; s/"/\\"/g')"
-        osascript -e "display notification \"$safe_location\" with title \"tmux-claude-status\" subtitle \"$icon\"" >/dev/null 2>&1 &
+        osascript -e "display notification \"$safe_location\" with title \"tmux-agent-status\" subtitle \"$icon\"" >/dev/null 2>&1 &
     fi
 
     # Optional sound - off by default since it fires on every

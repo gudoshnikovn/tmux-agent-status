@@ -1,4 +1,4 @@
-# tmux-claude-status
+# tmux-agent-status
 
 See at a glance which tmux pane running an AI coding agent (Claude
 Code, Hermes, ...) is waiting on you and which one just finished —
@@ -36,7 +36,7 @@ across every session and window — and jump straight to it.
 Add to `~/.tmux.conf`:
 
 ```tmux
-set -g @plugin 'you/tmux-claude-status'
+set -g @plugin 'gudoshnikovn/tmux-agent-status'
 ```
 
 Then `prefix + I` to install. This also detects which supported tools
@@ -47,8 +47,8 @@ you already have configured).
 ### Manual
 
 ```sh
-git clone <this repo> ~/.tmux/plugins/tmux-claude-status
-echo "run-shell ~/.tmux/plugins/tmux-claude-status/tmux/agent-status.tmux" >> ~/.tmux.conf
+git clone https://github.com/gudoshnikovn/tmux-agent-status.git ~/.tmux/plugins/tmux-agent-status
+echo "run-shell ~/.tmux/plugins/tmux-agent-status/tmux/agent-status.tmux" >> ~/.tmux.conf
 tmux source ~/.tmux.conf
 ```
 
