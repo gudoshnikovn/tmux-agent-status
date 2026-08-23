@@ -30,8 +30,26 @@ adapters/
     install-hooks.sh         # merges shell hooks into ~/.hermes/config.yaml
     process-pattern
 tmux/
-  agent-status.tmux        # TPM entry point: status-right wiring, keybind, adapter loop
+  agent-status.tmux        # real entry point: status-right wiring, keybind, adapter loop
+agent_status.tmux          # root-level shim - see below
 ```
+
+**`agent_status.tmux` at the repo root is not a duplicate — it's required for TPM.**
+TPM's `source_plugins.sh` globs `*.tmux` only directly in a plugin's
+root directory (`$plugin_path*.tmux`, no subdirectory recursion) when
+handling `@plugin '...'` entries. The actual logic lives in
+`tmux/agent-status.tmux` (grouped with `core/`/`adapters/` as the
+"tmux side" of the split); the root shim just `exec`s it. Verified by
+tracing TPM's own `scripts/source_plugins.sh` and reproducing the
+failure: with only `tmux/agent-status.tmux` present, `@plugin
+'gudoshnikovn/tmux-agent-status'` silently sourced nothing (no error,
+counter/keybind just never appeared) - the manual `run-shell
+'.../tmux/agent-status.tmux'` install path some users may still have
+never hit this because it names the full path directly. Don't remove
+the root shim or move `tmux/agent-status.tmux`'s logic back into it
+without re-testing the actual `@plugin` flow (a fresh `git clone` +
+TPM install), not just manually sourcing the file - that's what let
+this slip through once already.
 
 **Core is tool-agnostic. Adapters are the only tool-specific code.**
 Nothing under `core/` parses any tool's native hook payload or knows
