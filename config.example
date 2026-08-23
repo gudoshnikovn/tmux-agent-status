@@ -1,0 +1,26 @@
+# tmux-agent-status config file.
+#
+# Copy to ~/.config/tmux-agent-status/config (or point
+# $TMUX_AGENT_STATUS_CONFIG at another path) and uncomment what you want
+# to change. Anything left commented keeps its built-in default.
+#
+# Equivalent to `set -g @agent_status_<key> <value>` in .tmux.conf - an
+# explicit `set -g` always wins over this file, regardless of which one
+# loads first. Use whichever is more convenient; both work together.
+
+# prefix + j by default
+# pick_key = j
+
+# status-right "⏳2 ⚙️1 ✅3" counter - "off" to disable
+# summary = on
+
+# transient tmux popup on waiting/done transitions - "off" to disable
+# notify = on
+# notify_duration = 3000
+
+# macOS notification-center alert - "off" to disable (on by default if osascript exists)
+# notify_system = on
+
+# sound on waiting/done transitions - opt in, off by default
+# notify_sound = off
+# notify_sound_file = /System/Library/Sounds/Glass.aiff
