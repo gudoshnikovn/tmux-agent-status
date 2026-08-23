@@ -4,12 +4,20 @@ See at a glance which tmux pane running an AI coding agent (Claude
 Code, Hermes, ...) is waiting on you and which one just finished —
 across every session and window — and jump straight to it.
 
+## Supported tools
+
+- [Claude Code](https://github.com/anthropics/claude-code)
+- [Hermes](https://github.com/nousresearch/hermes-agent)
+
+Support for a new tool is just a new `adapters/<tool>/` directory —
+see "Adding a new tool" below.
+
 ## What it does
 
 - **Picker**: `prefix + j` opens a popup listing every active agent
   pane (working, waiting, or just done) across *all* tmux sessions
-  (via `fzf`), sorted needs-your-input-first, jump to any of them in
-  one keystroke.
+  (via [`fzf`](https://github.com/junegunn/fzf)), sorted
+  needs-your-input-first, jump to any of them in one keystroke.
 - **Status-line summary**: a persistent `⏳2 ⚙️1 ✅3`-style counter
   prepended to `status-right`, so you can see there's something to
   check without opening the picker.
@@ -24,7 +32,7 @@ across every session and window — and jump straight to it.
 
 ## Requirements
 
-- `fzf` (picker)
+- [`fzf`](https://github.com/junegunn/fzf) (picker)
 - Per adapter you use:
   - Claude Code: `jq`, Claude Code CLI
   - Hermes: `python3` with `pyyaml`, or `yq`, and the Hermes CLI
