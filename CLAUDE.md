@@ -6,11 +6,9 @@ gives a `prefix + j` fzf popup to jump to any such pane across all
 sessions, plus a persistent status-line counter.
 
 Read `README.md` for the user-facing install/config story. This file
-is for whoever (human or Claude) comes back to change the code. See
-`docs/superpowers/specs/2026-08-20-multi-tool-adapters-design.md` for
-the full design reasoning behind the core/adapter split below — this
-file documents the resulting code, that one documents *why* it's split
-this way and what alternatives were rejected.
+is for whoever (human or Claude) comes back to change the code — it
+documents the resulting code and the "why" behind non-obvious
+decisions inline, section by section, below.
 
 ## Files
 
@@ -158,16 +156,16 @@ in "Manual end-to-end test" below.
 ## The Claude Code adapter: hook wiring — why these specific events
 
 This was **not** guessed — the exact semantics below were verified
-against the official Claude Code hooks reference (fetched as a PDF,
-`code.claude.com/docs/en/hooks`) after two rounds of getting it wrong
-empirically. Don't revert to something that "seems more obvious"
-without re-reading that reference; several tempting options are wrong
-in non-obvious ways.
+against the official Claude Code hooks reference
+(<https://code.claude.com/docs/en/hooks>, fetched as a PDF) after two
+rounds of getting it wrong empirically. Don't revert to something that
+"seems more obvious" without re-reading that reference; several
+tempting options are wrong in non-obvious ways.
 
 The `Elicitation`/`ElicitationResult`/`StopFailure`/`SessionEnd` rows
 were added later, against a re-fetched copy of the same PDF
-(`hooks_docs_claude.pdf`, since removed from the repo root — see
-"Known limitations" — but was pulled 2026-08-20) - the event list grows
+(`hooks_docs_claude.pdf`, kept local and `.gitignore`d, not tracked in
+this repo — pulled 2026-08-20) - the event list grows
 between Claude Code versions (that pull also showed `TaskCreated`,
 `TeammateIdle`, `WorktreeCreate`, `PreCompact`, and others we
 deliberately did NOT hook - see "Events considered and rejected"
@@ -256,8 +254,10 @@ were considered and rejected for this use case (see table above).
 
 ## The Hermes adapter: event mapping and open gaps
 
-Based on `EventHooks_Hermes.pdf` (pulled 2026-08-20, since removed
-from the repo root — see "Known limitations"). Hermes has four
+Based on `EventHooks_Hermes.pdf` (kept local and `.gitignore`d, not
+tracked in this repo — pulled 2026-08-20; official docs at
+<https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks>).
+Hermes has four
 separate hook systems (gateway hooks, plugin hooks, shell hooks,
 outbound webhooks); only **shell hooks** are usable here, since they're
 the only ones that run as plain subprocesses invocable from a plugin
@@ -271,20 +271,23 @@ that doesn't live inside Hermes's own process. They're declared under a
 | `pre_approval_request` | `waiting` |
 | `post_tool_call` | `working` (direct analog of `PostToolUse`) |
 | `post_approval_response` | `working` (belt-and-suspenders alongside `post_tool_call` for clearing `waiting`, since there's no single event guaranteed to fire in every approval-resolution code path) |
+| `on_session_end` | `done` (analog of `Stop`, **not** `SessionEnd` — see below) |
 
-**Deliberately not wired, pending verification:**
+**`on_session_end` semantics — verified against the official docs**
+(<https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks>):
+it "fires at the very end of every `run_conversation()` call, regardless
+of outcome" — i.e. once per **turn**, not once per process exit. It
+also fires from the CLI's exit handler if the agent was actively
+processing when the user quit, which means it additionally covers
+Hermes's version of Claude Code's "interrupt gotcha" (see above) — an
+interrupted turn still gets a `done` here, no ~60s `idle_prompt`-style
+lag to wait out. Do not confuse this with Claude Code's `SessionEnd`
+(session/process end, mapped to `clear`) — Hermes has no equivalent
+"the process is exiting" event; `clear` for a dead Hermes pane still
+relies solely on the crash/liveness sweep.
 
-- `on_session_end` — documented as firing "at the very end of every
-  `run_conversation()` call". It's unverified whether that means
-  end-of-process (→ `clear`, like Claude's `SessionEnd`) or
-  end-of-turn (→ overlaps with `Stop`'s job). Wiring it wrong would
-  either leave panes stuck without a `clear` path, or clear
-  mid-conversation. **Verify empirically** with `hermes hooks test
-  on_session_end` (or a debug-logging throwaway shell hook — same
-  technique used above for Claude Code's `PreToolUse`/`PostToolUse`)
-  before wiring it. Until then, Hermes panes rely solely on the
-  crash/liveness sweep to clear a stale status once the `hermes`
-  process actually exits.
+**Still not wired:**
+
 - Any `StopFailure` analog — Hermes's closest events
   (`api_request_error`, `transform_api_error_classification`) fire per
   failed *attempt* mid-turn (which may still retry), not per
@@ -550,30 +553,3 @@ core/agent-status-summary.sh   # run again; status SHOULD now be cleared
 tmux show-option -p -t $TMUX_PANE @agent_status   # confirm empty
 ```
 
-## Known limitations / not-yet-done
-
-- Published at `https://github.com/gudoshnikovn/tmux-agent-status` (MIT
-  license). Note the user's own git remote for this repo uses a
-  personal SSH host alias (`git@github.gudoshnikovn:...`, configured in
-  their `~/.ssh/config` for multi-account auth) — that's local to their
-  machine, not something to put in user-facing docs; anyone else clones
-  via the normal `github.com` host. The user's own `.tmux.conf` still
-  loads the plugin via a local symlink
-  (`~/.tmux/plugins/tmux-agent-status` -> the working repo clone), not
-  TPM's `@plugin 'gudoshnikovn/tmux-agent-status'` git-clone flow —
-  switching to that is a separate step, ask before doing it.
-- The reference PDFs (`hooks_docs_claude.pdf`, `EventHooks_Hermes.pdf`)
-  used to derive the event tables above are deliberately not tracked in
-  this repo (kept local, `.gitignore`d) — re-fetch the current docs
-  rather than assuming either event table stays exhaustive forever,
-  especially for Hermes, which is a much younger integration here than
-  Claude Code's.
-- No automated tests; verification so far has been the manual jq/yaml/
-  tmux commands documented above, run by hand each time. If this grows,
-  consider a small bats/shellspec suite for the adapters' merge logic
-  in particular, since that's the part most likely to regress silently
-  (wrong dedup = duplicate hook firings, easy to miss).
-- Hermes's `on_session_end` ambiguity (see "The Hermes adapter" above)
-  is unresolved — it's not wired to anything yet. Resolving it is the
-  next natural follow-up once someone can run `hermes hooks test`
-  against a real Hermes install.

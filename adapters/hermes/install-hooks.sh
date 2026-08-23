@@ -2,21 +2,19 @@
 # Merges the agent-status shell-hook commands into ~/.hermes/config.yaml,
 # additively, without touching any other hooks already configured there.
 #
-# Event mapping (see docs/superpowers/specs/2026-08-20-multi-tool-adapters-design.md
-# for the full reasoning, including which events were deliberately left
-# unwired pending empirical verification):
+# Event mapping (see CLAUDE.md, "The Hermes adapter", for the full
+# reasoning):
 #   pre_llm_call          -> working  (turn start, closest to UserPromptSubmit)
 #   pre_tool_call         -> working  (a tool is about to run)
 #   pre_approval_request  -> waiting  (an approval decision is about to be requested)
 #   post_tool_call        -> working  (a tool just finished)
 #   post_approval_response -> working (an approval decision resolved)
+#   on_session_end         -> done    (turn ended, any outcome - see CLAUDE.md)
 #
-# Not wired: on_session_end (ambiguous firing frequency - could be
-# per-turn or per-process-exit, unverified) and any "turn failed via
-# API error" analog (Hermes has no single event for "turn abandoned",
-# only per-attempt events that may still retry). Panes running Hermes
-# instead rely on the crash/liveness sweep in
-# core/agent-status-summary.sh to clear a stale status once the
+# Not wired: a "turn failed via API error" analog (Hermes has no single
+# event for "turn abandoned", only per-attempt events that may still
+# retry). Panes running Hermes instead rely on the crash/liveness sweep
+# in core/agent-status-summary.sh to clear a stale status once the
 # `hermes` process is no longer the pane's foreground command.
 #
 # Hermes shell hooks require either an interactive first-use approval
@@ -51,6 +49,8 @@ hooks:
     - command: "$HOOK_SCRIPT working --tool hermes"
   post_approval_response:
     - command: "$HOOK_SCRIPT working --tool hermes"
+  on_session_end:
+    - command: "$HOOK_SCRIPT done --tool hermes"
 EOF
 }
 
@@ -77,6 +77,7 @@ events = {
     "pre_approval_request": "waiting",
     "post_tool_call": "working",
     "post_approval_response": "working",
+    "on_session_end": "done",
 }
 
 for event, status in events.items():
@@ -106,7 +107,8 @@ elif command -v yq >/dev/null 2>&1; then
         "pre_tool_call:working" \
         "pre_approval_request:waiting" \
         "post_tool_call:working" \
-        "post_approval_response:working"
+        "post_approval_response:working" \
+        "on_session_end:done"
     do
         event="${spec%%:*}"
         status="${spec#*:}"

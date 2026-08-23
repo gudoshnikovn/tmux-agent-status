@@ -6,8 +6,8 @@ across every session and window — and jump straight to it.
 
 ## Supported tools
 
-- [Claude Code](https://github.com/anthropics/claude-code)
-- [Hermes](https://github.com/nousresearch/hermes-agent)
+- [Claude Code](https://github.com/anthropics/claude-code) ([hooks docs](https://code.claude.com/docs/en/hooks))
+- [Hermes](https://github.com/nousresearch/hermes-agent) ([hooks docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks))
 
 Support for a new tool is just a new `adapters/<tool>/` directory —
 see "Adding a new tool" below.
