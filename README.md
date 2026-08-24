@@ -166,7 +166,9 @@ automatically on every `tmux source-file` — no core changes needed.
   the tool starting to execute, only `PreToolUse` (before the
   permission check) and `PostToolUse` (after the tool finishes). No
   workaround is possible until Claude Code adds a hook for that
-  transition — see CLAUDE.md for the full writeup.
+  transition — tracked at
+  [anthropics/claude-code#77700](https://github.com/anthropics/claude-code/issues/77700),
+  see CLAUDE.md for the full writeup.
 
 ## Uninstall
 

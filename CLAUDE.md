@@ -269,9 +269,10 @@ busy. This is not a bug in this plugin's hook wiring - it's a gap in
 Claude Code's hook API itself, in the same category as the interrupt
 gotcha above (a real state transition with no hook to observe it).
 There is currently no workaround: no other documented event fires in
-that window. Filed upstream as a feature request against
-`anthropics/claude-code` asking for a hook (e.g. `PermissionGranted` /
-`ToolExecutionStart`) covering this gap - if/when one ships, wire it to
+that window. Tracked upstream at
+[anthropics/claude-code#77700](https://github.com/anthropics/claude-code/issues/77700)
+("Add PermissionResolved hook event after user approves or denies a
+permission request") - if/when a hook like that ships, wire it to
 `working` and remove this note.
 
 ### Notification's full `notification_type` list (for reference)
