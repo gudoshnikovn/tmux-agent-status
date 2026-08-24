@@ -245,6 +245,35 @@ detect "interrupted" any faster with documented hooks. If Claude Code
 ever adds a dedicated interrupt/cancel hook, switch to it and drop this
 workaround.
 
+### The permission-approved gotcha
+
+**Between "you approve a permission prompt" and "the tool finishes
+executing," the pane sits on `waiting` the whole time, even though the
+tool is now actually running.** Confirmed directly against the current
+hooks docs (fetched 2026-08-24, `https://code.claude.com/docs/en/hooks`):
+the full current event list includes `PreToolUse`, `PermissionRequest`,
+`PermissionDenied`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`,
+and others - but none of them fire at the moment a permission decision
+resolves or a tool begins executing post-approval. The lifecycle is
+strictly linear: `PermissionRequest` ("when a tool call needs a
+permission decision") → the decision resolves → `PostToolUse` ("after a
+tool call succeeds"). Nothing observable happens in between, and
+`PreToolUse` ("before a tool call executes") already fired earlier,
+*before* the permission check - it does not fire again once the
+decision is made (see the "waiting doesn't clear" gotcha above).
+
+Consequence: a tool that's slow to execute *after* approval (a web
+fetch, a long shell command) reads as "waiting for you" for its entire
+run time, even though you already responded and Claude is legitimately
+busy. This is not a bug in this plugin's hook wiring - it's a gap in
+Claude Code's hook API itself, in the same category as the interrupt
+gotcha above (a real state transition with no hook to observe it).
+There is currently no workaround: no other documented event fires in
+that window. Filed upstream as a feature request against
+`anthropics/claude-code` asking for a hook (e.g. `PermissionGranted` /
+`ToolExecutionStart`) covering this gap - if/when one ships, wire it to
+`working` and remove this note.
+
 ### Notification's full `notification_type` list (for reference)
 
 `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`,

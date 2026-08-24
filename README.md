@@ -155,6 +155,19 @@ Add a directory `adapters/<tool>/` with three files:
 `tmux/agent-status.tmux` picks up any `adapters/*/` directory
 automatically on every `tmux source-file` — no core changes needed.
 
+## Known limitations
+
+- **Stale "waiting" while a tool runs after approval (Claude Code).**
+  Once you approve a permission prompt, the pane keeps showing
+  `waiting` until the tool finishes — for a slow tool (a web fetch, a
+  long shell command), it can look like it's still waiting on you
+  when it's actually running. This is a gap in Claude Code's hook API
+  itself: no hook fires between a permission decision resolving and
+  the tool starting to execute, only `PreToolUse` (before the
+  permission check) and `PostToolUse` (after the tool finishes). No
+  workaround is possible until Claude Code adds a hook for that
+  transition — see CLAUDE.md for the full writeup.
+
 ## Uninstall
 
 Remove the `@plugin` line, then remove the hook entries pointing at
