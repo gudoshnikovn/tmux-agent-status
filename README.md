@@ -18,6 +18,9 @@ see "Adding a new tool" below.
   pane (working, waiting, or just done) across *all* tmux sessions
   (via [`fzf`](https://github.com/junegunn/fzf)), sorted
   needs-your-input-first, jump to any of them in one keystroke.
+  `tab` multi-selects panes and `ctrl-x` dismisses them from the list
+  (clears their status) without leaving the popup — the pane reappears
+  on its own the next time its agent reports activity.
 - **Status-line summary**: a persistent `⏳2 ⚙️1 ✅3`-style counter
   prepended to `status-right`, so you can see there's something to
   check without opening the picker.
