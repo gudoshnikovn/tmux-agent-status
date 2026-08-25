@@ -4,6 +4,8 @@ See at a glance which tmux pane running an AI coding agent (Claude
 Code, Hermes, ...) is waiting on you and which one just finished —
 across every session and window — and jump straight to it.
 
+![demo](assets/demo.gif)
+
 ## Supported tools
 
 - [Claude Code](https://github.com/anthropics/claude-code) ([hooks docs](https://code.claude.com/docs/en/hooks))
