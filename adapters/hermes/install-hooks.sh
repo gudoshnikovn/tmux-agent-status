@@ -23,8 +23,15 @@
 # register. This script deliberately does NOT set hooks_auto_accept -
 # that flag weakens Hermes's consent model for every shell hook, not
 # just ours. Run `hermes` once after installing and approve the prompt,
-# or set one of the opt-ins yourself if you want non-interactive
-# installs (e.g. in CI).
+# run adapters/hermes/accept-hooks.sh to approve all pending hooks in
+# one shot without a TTY prompt, or set one of the opt-ins yourself if
+# you want non-interactive installs (e.g. in CI).
+#
+# Note a declined prompt is NOT persisted anywhere - Hermes only
+# records approvals, never denials - so dismissing it (Enter, "n",
+# Ctrl-C) just means you'll be asked again next `hermes` launch. That's
+# expected, not a bug in this adapter; accept-hooks.sh exists precisely
+# so you don't have to re-answer it every time.
 
 set -euo pipefail
 
@@ -100,7 +107,7 @@ PYEOF
 if command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
     merge_with_python
     echo "Installed agent-status hooks into $CONFIG_FILE"
-    echo "Run 'hermes' once and approve the shell-hook prompt (or set HERMES_ACCEPT_HOOKS=1) to activate them." >&2
+    echo "Run 'hermes' once and approve the shell-hook prompt, or run $PLUGIN_DIR/adapters/hermes/accept-hooks.sh to approve them all non-interactively." >&2
 elif command -v yq >/dev/null 2>&1; then
     for spec in \
         "pre_llm_call:working" \
@@ -118,7 +125,7 @@ elif command -v yq >/dev/null 2>&1; then
         yq -i ".hooks.\"$event\" = ((.hooks.\"$event\" // []) | map(select(.command | test(\"^$HOOK_SCRIPT\") | not)) + [{\"command\": \"$command_str\"}])" "$CONFIG_FILE"
     done
     echo "Installed agent-status hooks into $CONFIG_FILE"
-    echo "Run 'hermes' once and approve the shell-hook prompt (or set HERMES_ACCEPT_HOOKS=1) to activate them." >&2
+    echo "Run 'hermes' once and approve the shell-hook prompt, or run $PLUGIN_DIR/adapters/hermes/accept-hooks.sh to approve them all non-interactively." >&2
 else
     print_manual_instructions
 fi

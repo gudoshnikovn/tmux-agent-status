@@ -338,6 +338,56 @@ It prints a reminder to run `hermes` once and approve the prompt
 instead. Don't "fix" this by auto-setting the flag without discussing
 the tradeoff first.
 
+**Declining the prompt is not persisted — only approving is.**
+Verified directly against `agent/shell_hooks.py`: `_prompt_and_record()`
+calls `_record_approval()` (which writes to the allowlist) only on a
+"y"/"yes" answer; dismissing it any other way (bare Enter, "n",
+Ctrl-C/EOF) just `return`s `False` with nothing written to disk. So a
+declined/ignored prompt reappears on every subsequent `hermes` launch —
+this is Hermes's own behavior, not something this adapter can change
+from the outside (we only get to choose what goes in `hooks:`, not how
+Hermes gates registering it). Also verified: `register_from_config()`
+(the function that shows this prompt) only runs when Hermes's
+top-level `command` is in its `_AGENT_COMMANDS` set (`None`/`chat`/
+`acp`/`rl`) or a matching agent subcommand (`cron run|tick`,
+`gateway run`, `mcp serve`) — `hermes hooks list/test/revoke/doctor`
+all return before ever reaching it, so none of those can be used to
+trigger or inspect a fresh approval pass.
+
+**`adapters/hermes/accept-hooks.sh`** is the one-shot fix for "I don't
+want to re-answer the prompt every time, and I don't want
+`hooks_auto_accept: true` weakening consent for every future hook
+forever": it runs `hermes --accept-hooks -z "ok"` in the background
+(`-z`/`--oneshot` is the cheapest command that lands in
+`_AGENT_COMMANDS`), polls for `~/.hermes/shell-hooks-allowlist.json` to
+appear, then kills the process — registration (and the allowlist
+write) happens during startup, before the oneshot prompt is even sent,
+so this works even if the configured model/provider is unreachable.
+Once an `(event, command)` pair is in the allowlist it's never
+re-prompted again, with or without `--accept-hooks`, so this needs to
+be run only once per hook-command-string (i.e. re-run it if
+`adapters/hermes/install-hooks.sh` ever changes the command string
+itself, e.g. if the plugin is reinstalled at a different path). To
+reverse a single approval: `hermes hooks revoke "<exact command as
+shown by hermes hooks list>"`.
+
+**`adapters/hermes/uninstall-hooks.sh`** is the counterpart to
+`install-hooks.sh`: it strips only the entries whose command starts
+with this plugin's `core/agent-status.sh` path out of the `hooks:`
+block (same command-prefix match `install-hooks.sh` uses for its own
+dedup, so unrelated hooks from other tools are left alone), then calls
+`hermes hooks revoke` on each removed command so the allowlist doesn't
+keep a stale approval around for a hook that's no longer configured.
+Not wired into `tmux/agent-status.tmux`'s adapter loop (that loop only
+ever installs) — it's a manual "get tmux-agent-status out of my Hermes
+config" command. Gotcha hit while testing this: `hermes hooks revoke`
+does **not** honor `$HERMES_CONFIG_FILE` — it always revokes against
+the real `~/.hermes/shell-hooks-allowlist.json` — so testing
+`uninstall-hooks.sh` against a scratch config (the same
+`HERMES_CONFIG_FILE` trick used for `install-hooks.sh`) still revokes
+real allowlist entries as a side effect. Re-approve with
+`accept-hooks.sh` afterward if you do this against your real setup.
+
 **YAML editing**: `install-hooks.sh` prefers `python3` + `pyyaml`
 (likely present since Hermes itself needs Python for its own
 `handler.py`-based hooks), falls back to `yq` (mikefarah/yq syntax) if
