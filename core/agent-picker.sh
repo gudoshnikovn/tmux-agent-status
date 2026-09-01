@@ -12,20 +12,21 @@ CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 list_panes() {
     local rows filtered rank sorted
-    rows="$(tmux list-panes -a -F '#{@agent_status}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{pane_current_command}')"
+    rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{pane_current_command}')"
 
     filtered="$(printf '%s\n' "$rows" | awk -F'\t' '$1 == "waiting" || $1 == "working" || $1 == "done"')"
     [ -z "$filtered" ] && return 0
 
-    # Needs-your-input panes first, then still-working, then just-finished.
+    # Needs-your-input panes first, then still-working, then just-finished;
+    # within each of those groups, most-recently-changed status first.
     rank='{ order = ($1 == "waiting") ? 0 : ($1 == "working") ? 1 : 2; print order "\t" $0 }'
-    sorted="$(printf '%s\n' "$filtered" | awk -F'\t' "$rank" | sort -t'	' -k1,1n | cut -f2-)"
+    sorted="$(printf '%s\n' "$filtered" | awk -F'\t' "$rank" | sort -t'	' -k1,1n -k3,3nr | cut -f2-)"
 
     printf '%s\n' "$sorted" | awk -F'\t' '{
         if ($1 == "waiting")     icon = "⏳ waiting";
         else if ($1 == "working") icon = "⚙️ working";
         else                       icon = "✅ done   ";
-        printf "%s | %-25s | %s (%s)\t%s\n", icon, $2, $3, $4, $2;
+        printf "%s | %-25s | %s (%s)\t%s\n", icon, $3, $4, $5, $3;
     }'
 }
 
