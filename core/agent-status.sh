@@ -6,29 +6,46 @@
 # Usage: agent-status.sh <working|waiting|done|clear> [--tool <name>]
 #
 # Reads stdin (an adapter's native hook JSON payload, if any) only to
-# drain it; the status value comes from $1. Writes tmux pane user
-# options: @agent_status, @agent_status_updated_at (epoch seconds,
-# used by the crash/liveness sweep in agent-status-summary.sh), and
-# @agent_status_tool (only if --tool was passed - display-only, no
-# status logic depends on it, and a bare `clear` call can omit it to
-# leave the last-known tool name in place).
+# drain it; the status value comes from $1.
 #
-# Besides writing @agent_status, each invocation also:
-#   - forces `tmux refresh-client` so the status-line summary (see
-#     agent-status-summary.sh) updates right away instead of waiting
-#     for the next unrelated redraw
-#   - on a real transition into waiting/done, fires a transient
-#     `tmux display-message` so you notice without checking the picker
-#     (opt out: `set -g @agent_status_notify off`) - note tmux dismisses
-#     this on ANY keypress anywhere, so it can vanish unread if you're
-#     typing in another pane at that instant
-#   - the same transition can also fire a macOS notification-center
-#     alert (survives the keypress problem above since it's outside
-#     tmux) via `@agent_status_notify_system` (default: on if osascript
-#     exists), and/or a sound via `@agent_status_notify_sound`
-#     (default: off - opt in, it's the most intrusive option)
+# Transport: how this reaches the real tmux server, chosen by
+# $TMUX_AGENT_STATUS_TRANSPORT (falling back to the tmux global option
+# @agent_status_transport, i.e. config-file/`set -g @agent_status_transport`,
+# only when the `tmux` binary is actually present - see below for why
+# that guard matters) - defaults to "direct" if neither is set:
+#
+#   - direct (default): call tmux directly, in this same process. Only
+#     works when the hook runs in the same OS kernel the tmux server is
+#     in - true for a normal local shell, false inside a
+#     devcontainer/Docker/WSL2/SSH/CI sandbox even when the tmux
+#     socket file is visible via a shared filesystem (a Unix socket is
+#     a kernel object, not just bytes on disk - connect() to a bind-
+#     mounted socket from a different kernel fails with "no server
+#     running").
+#   - file: append a line describing this transition to
+#     $TMUX_AGENT_STATUS_BRIDGE_FILE (falling back to the tmux global
+#     option @agent_status_bridge_file the same way as transport
+#     above) instead of touching tmux at all. A separate process,
+#     agent-status-bridge-watch.sh, running on the host where tmux
+#     actually lives, tails that file and replays each line into tmux.
+#     This is the escape hatch for containers/VMs/remote hosts: set
+#     both env vars in the container's environment (they must be set
+#     explicitly - Docker does not forward host env vars into a
+#     container on its own) and point the bridge file at a path shared
+#     with the host (a bind mount). See README's "Agent running in a
+#     container/VM/remote host" section.
+#
+# Besides writing @agent_status (direct transport) or a bridge-file
+# line (file transport), see agent-status-apply.sh for the rest of the
+# side effects (refresh-client, transient notification, macOS alert,
+# sound) - identical either way, just applied either inline or by the
+# bridge watcher.
 
 set -euo pipefail
+
+CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=./agent-status-apply.sh
+source "$CURRENT_DIR/agent-status-apply.sh"
 
 status=""
 tool=""
@@ -51,77 +68,41 @@ done
 cat >/dev/null || true
 
 # Not running inside tmux (or pane already gone) - nothing to report.
+# Note this env var must be forwarded explicitly into a
+# container/VM/remote host for transport=file to have a pane to target
+# - it is not something Docker/SSH pass through on their own.
 if [ -z "${TMUX_PANE:-}" ]; then
     exit 0
 fi
 
-if ! tmux has-session 2>/dev/null; then
+case "$status" in
+    working|waiting|done) ;;
+    *) status="" ;;
+esac
+
+transport="${TMUX_AGENT_STATUS_TRANSPORT:-}"
+if [ -z "$transport" ] && command -v tmux >/dev/null 2>&1; then
+    transport="$(tmux show-option -gqv @agent_status_transport 2>/dev/null || true)"
+fi
+[ -z "$transport" ] && transport="direct"
+
+if [ "$transport" = "file" ]; then
+    bridge_file="${TMUX_AGENT_STATUS_BRIDGE_FILE:-}"
+    if [ -z "$bridge_file" ] && command -v tmux >/dev/null 2>&1; then
+        bridge_file="$(tmux show-option -gqv @agent_status_bridge_file 2>/dev/null || true)"
+    fi
+
+    if [ -z "$bridge_file" ]; then
+        echo "agent-status.sh: transport=file requires TMUX_AGENT_STATUS_BRIDGE_FILE (or @agent_status_bridge_file) to be set" >&2
+        exit 0
+    fi
+
+    mkdir -p "$(dirname "$bridge_file")" 2>/dev/null || true
+    # Single short line, well under PIPE_BUF - concurrent appends from
+    # multiple panes/containers stay atomic without needing a lock.
+    printf '%s pane=%s status=%s tool=%s\n' "$(date +%s)" "$TMUX_PANE" "$status" "$tool" >> "$bridge_file" 2>/dev/null || true
     exit 0
 fi
 
-# Read the previous value before overwriting it - needed below to tell
-# a real transition (e.g. "working" -> "waiting") from a same-status
-# re-fire, so the transient notification doesn't spam on every re-fire.
-prev_status="$(tmux show-option -p -qv -t "$TMUX_PANE" @agent_status 2>/dev/null || true)"
-
-case "$status" in
-    working|waiting|done)
-        tmux set-option -p -t "$TMUX_PANE" @agent_status "$status" 2>/dev/null || true
-        ;;
-    clear|*)
-        status=""
-        tmux set-option -p -t "$TMUX_PANE" @agent_status "" 2>/dev/null || true
-        ;;
-esac
-
-tmux set-option -p -t "$TMUX_PANE" @agent_status_updated_at "$(date +%s)" 2>/dev/null || true
-
-if [ -n "$tool" ]; then
-    tmux set-option -p -t "$TMUX_PANE" @agent_status_tool "$tool" 2>/dev/null || true
-fi
-
-# The status-line #() summary is a global format, but tmux does not
-# recompute it on every option change - only on the next natural
-# redraw (focus change, output, status-interval timer, etc). Force it
-# immediately instead of waiting/polling.
-tmux refresh-client 2>/dev/null || true
-
-# Transient "psst, look over here" notification: only on a real
-# transition into waiting/done (not a same-status re-fire, and not on
-# "working" - that would fire on every single tool call). Opt out with
-# `set -g @agent_status_notify off`.
-notify_enabled="$(tmux show-option -gqv @agent_status_notify 2>/dev/null || true)"
-if [ "$notify_enabled" != "off" ] && [ "$status" != "$prev_status" ] && { [ "$status" = "waiting" ] || [ "$status" = "done" ]; }; then
-    duration="$(tmux show-option -gqv @agent_status_notify_duration 2>/dev/null || true)"
-    [ -z "$duration" ] && duration=3000
-
-    location="$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || true)"
-
-    case "$status" in
-        waiting) icon="⏳ waiting" ;;
-        done)    icon="✅ done" ;;
-    esac
-
-    tmux display-message -d "$duration" -t "$TMUX_PANE" "$icon: $location" 2>/dev/null || true
-
-    # macOS notification-center alert - unlike the tmux message above,
-    # this isn't dismissed by keypresses in the terminal, so it's the
-    # one that actually gets noticed while you're typing elsewhere.
-    system_notify="$(tmux show-option -gqv @agent_status_notify_system 2>/dev/null || true)"
-    if [ "$system_notify" != "off" ] && command -v osascript >/dev/null 2>&1; then
-        # Escape backslashes/quotes - session/window/pane names are
-        # user-controlled and get embedded in an AppleScript string.
-        safe_location="$(printf '%s' "$location" | sed 's/\\/\\\\/g; s/"/\\"/g')"
-        osascript -e "display notification \"$safe_location\" with title \"tmux-agent-status\" subtitle \"$icon\"" >/dev/null 2>&1 &
-    fi
-
-    # Optional sound - off by default since it fires on every
-    # waiting/done transition and can get old fast. Opt in with
-    # `set -g @agent_status_notify_sound on`.
-    sound_enabled="$(tmux show-option -gqv @agent_status_notify_sound 2>/dev/null || true)"
-    if [ "$sound_enabled" = "on" ] && command -v afplay >/dev/null 2>&1; then
-        sound_file="$(tmux show-option -gqv @agent_status_notify_sound_file 2>/dev/null || true)"
-        [ -z "$sound_file" ] && sound_file="/System/Library/Sounds/Glass.aiff"
-        afplay "$sound_file" >/dev/null 2>&1 &
-    fi
-fi
+# transport = direct
+agent_status_apply_to_tmux "$TMUX_PANE" "$status" "$tool"

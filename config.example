@@ -24,3 +24,12 @@
 # sound on waiting/done transitions - opt in, off by default
 # notify_sound = off
 # notify_sound_file = /System/Library/Sounds/Glass.aiff
+
+# how agent-status.sh reaches the real tmux server - "file" for an
+# agent running in a container/VM/remote host that can't reach the
+# tmux socket directly (see README's "Agent running in a
+# container/VM/remote host" section). In that scenario these two
+# normally need to be set as env vars *inside the container* instead
+# of here, since the container doesn't read this host config file.
+# transport = direct
+# bridge_file = ~/.cache/tmux-agent-status/bridge-file

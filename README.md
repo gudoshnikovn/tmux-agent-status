@@ -111,6 +111,22 @@ set -g @agent_status_notify_sound_file '/System/Library/Sounds/Glass.aiff'
 | `notify_system` | `@agent_status_notify_system` | `on` if `osascript` exists | macOS notification-center alert |
 | `notify_sound` | `@agent_status_notify_sound` | `off` | Sound on waiting/done |
 | `notify_sound_file` | `@agent_status_notify_sound_file` | `/System/Library/Sounds/Glass.aiff` | Sound file to play |
+| `transport` | `@agent_status_transport` | `direct` | `file` to relay through a bridge file instead of calling tmux directly — see below |
+| `bridge_file` | `@agent_status_bridge_file` | — | Path to the bridge file when `transport = file` |
+
+## Agent running in a container/VM/remote host
+
+Agent running inside a devcontainer, plain Docker, WSL2 (a different
+distro than tmux), or over SSH to a remote host can't reach the tmux
+socket directly — direct `tmux` calls only work when the hook runs in
+the same OS kernel the tmux server is in. There's an opt-in `file`
+transport for this: the hook writes status transitions to a shared
+bridge file instead of calling `tmux`, and a small relay running on
+the host replays them into the real tmux server.
+
+See **[docs/remote-agents.md](docs/remote-agents.md)** for how it
+works, the `transport`/`bridge_file` options, and ready-to-use launch
+patterns for devcontainer CLI, plain Docker, SSH, and WSL2.
 
 ## How it works
 
