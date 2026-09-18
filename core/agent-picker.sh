@@ -11,6 +11,7 @@ set -euo pipefail
 CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 list_panes() {
+    local current_session="$1"
     local rows filtered rank sorted
     rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{pane_current_command}')"
 
@@ -22,16 +23,23 @@ list_panes() {
     rank='{ order = ($1 == "waiting") ? 0 : ($1 == "working") ? 1 : 2; print order "\t" $0 }'
     sorted="$(printf '%s\n' "$filtered" | awk -F'\t' "$rank" | sort -t'	' -k1,1n -k3,3nr | cut -f2-)"
 
-    printf '%s\n' "$sorted" | awk -F'\t' '{
+    # Rows in the session we were invoked from get a green "→" marker
+    # (ANSI, relies on --ansi in the fzf invocation below) so the
+    # session you're currently in stands out from every other one.
+    printf '%s\n' "$sorted" | awk -F'\t' -v cur="$current_session" '{
         if ($1 == "waiting")     icon = "⏳ waiting";
         else if ($1 == "working") icon = "⚙️ working";
         else                       icon = "✅ done   ";
-        printf "%s | %-25s | %s (%s)\t%s\n", icon, $3, $4, $5, $3;
+        n++;
+        num = (n <= 9) ? n : " ";
+        session = $3; sub(/:.*/, "", session);
+        marker = (session == cur) ? "\033[1;32m→\033[0m" : " ";
+        printf "%s%s %s | %-25s | %s (%s)\t%s\n", marker, num, icon, $3, $4, $5, $3;
     }'
 }
 
 if [ "${1:-}" = "--list" ]; then
-    list_panes
+    list_panes "${2:-}"
     exit 0
 fi
 
@@ -48,17 +56,28 @@ if ! command -v fzf >/dev/null 2>&1; then
     exit 1
 fi
 
-formatted="$(list_panes)"
+current_pane="${1:-}"
+current_session="${current_pane%%:*}"
+
+formatted="$(list_panes "$current_session")"
 
 if [ -z "$formatted" ]; then
     tmux display-message "agent-status: no active panes"
     exit 0
 fi
 
+number_binds=""
+for n in 1 2 3 4 5 6 7 8 9; do
+    number_binds="$number_binds --bind $n:pos($n)+accept"
+done
+
+# shellcheck disable=SC2086
 choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1 --ansi \
-    --prompt="agent panes> " --height=~40% --reverse \
-    --header='enter: jump | tab: select | ctrl-x: dismiss selected' \
-    --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($CURRENT_DIR/agent-picker.sh --list)")"
+    --prompt="agent panes> " --reverse \
+    --header='enter: jump | 1-9: jump to row | tab: select | ctrl-x: dismiss selected' \
+    --color='fg:-1,bg:-1,fg+:16:bold,bg+:117,hl:25,hl+:25:bold,info:25,prompt:25,pointer:196,marker:28,header:25,border:-1,label:-1' \
+    $number_binds \
+    --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($CURRENT_DIR/agent-picker.sh --list '$current_session')")"
 
 [ -z "$choice" ] && exit 0
 

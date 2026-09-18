@@ -53,7 +53,14 @@ if [ -z "$base_status_right" ]; then
 fi
 tmux set-option -g status-right "#($PLUGIN_ROOT/core/agent-status-summary.sh)${base_status_right}"
 
-tmux bind-key "$pick_key" display-popup -E -w 80% -h 60% "'$PLUGIN_ROOT/core/agent-picker.sh'"
+# display-popup does not expand #{...} formats in its own arguments
+# (unlike run-shell), so the popup can't be told which pane invoked it
+# directly - wrapping it in run-shell (whose command string IS format-
+# expanded) lets us resolve the invoking pane before display-popup ever
+# sees the string. Verified empirically: a bare
+# `display-popup -E "echo '#{session_name}'"` prints the literal,
+# unexpanded text; nesting it inside run-shell resolves it correctly.
+tmux bind-key "$pick_key" run-shell -b "tmux display-popup -E -w 100 -h 20 -b heavy -S 'fg=blue' '$PLUGIN_ROOT/core/agent-picker.sh #{session_name}:#{window_index}.#{pane_index}'"
 
 # Each adapters/<tool>/ directory owns its own detection and hook
 # installation - the core here never needs to know which tools exist.
