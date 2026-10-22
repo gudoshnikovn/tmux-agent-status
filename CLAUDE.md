@@ -476,6 +476,12 @@ crash/liveness sweep (which lives in the same script, see above).
 `install-hooks.sh` unconditionally), so it has to be idempotent against
 a settings file that may have unrelated hooks from other tools.
 
+Without `$CLAUDE_SETTINGS_FILE` it also merges into every existing
+`~/.claude-*/settings.json`: a Claude started with
+`CLAUDE_CONFIG_DIR=~/.claude-<profile>` reads only that profile's
+settings, so it never fired our hooks and silently never showed up in
+the picker. Profiles without a `settings.json` are not created.
+
 The dedup strategy: for each event we manage, strip *any* existing
 entry whose `hooks[0].command` starts with our script's absolute path
 (`is_ours` in the jq filter), regardless of matcher, then re-add the

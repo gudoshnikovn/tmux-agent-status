@@ -10,6 +10,18 @@ set -euo pipefail
 
 PLUGIN_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 HOOK_SCRIPT="$PLUGIN_DIR/core/agent-status.sh"
+
+# Profiles launched with CLAUDE_CONFIG_DIR=~/.claude-<name> read only
+# their own settings.json, so ~/.claude's hooks never fire there.
+# Re-run ourselves once per existing profile settings file.
+if [ -z "${CLAUDE_SETTINGS_FILE:-}" ]; then
+    for f in "$HOME/.claude/settings.json" "$HOME"/.claude-*/settings.json; do
+        [ "$f" = "$HOME/.claude/settings.json" ] || [ -f "$f" ] || continue
+        CLAUDE_SETTINGS_FILE="$f" "${BASH_SOURCE[0]}"
+    done
+    exit 0
+fi
+
 SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
 
 if ! command -v jq >/dev/null 2>&1; then
