@@ -26,15 +26,22 @@ list_panes() {
     # Rows in the session we were invoked from get a green "→" marker
     # (ANSI, relies on --ansi in the fzf invocation below) so the
     # session you're currently in stands out from every other one.
-    printf '%s\n' "$sorted" | awk -F'\t' -v cur="$current_session" '{
-        if ($1 == "waiting")     icon = "⏳ waiting";
-        else if ($1 == "working") icon = "⚙️ working";
-        else                       icon = "✅ done   ";
-        n++;
-        num = (n <= 9) ? n : " ";
-        session = $3; sub(/:.*/, "", session);
-        marker = (session == cur) ? "\033[1;32m→\033[0m" : " ";
-        printf "%s%s %s | %-25s | %s (%s)\t%s\n", marker, num, icon, $3, $4, $5, $3;
+    # Several agent panes in one session get a "[i/N]" badge so it's
+    # obvious they're siblings and which one is which.
+    printf '%s\n' "$sorted" | awk -F'\t' -v cur="$current_session" '
+    { line[NR] = $0; s = $3; sub(/:.*/, "", s); sess[NR] = s; total[s]++ }
+    END {
+        for (n = 1; n <= NR; n++) {
+            split(line[n], f, "\t");
+            if (f[1] == "waiting")      icon = "⏳ waiting";
+            else if (f[1] == "working") icon = "⚙️ working";
+            else                        icon = "✅ done   ";
+            num = (n <= 9) ? n : " ";
+            s = sess[n];
+            marker = (s == cur) ? "\033[1;32m→\033[0m" : " ";
+            badge = (total[s] > 1) ? sprintf("[%d/%d]", ++seen[s], total[s]) : "";
+            printf "%s%s %s | %-25s %-5s | %s (%s)\t%s\n", marker, num, icon, f[3], badge, f[4], f[5], f[3];
+        }
     }'
 }
 
