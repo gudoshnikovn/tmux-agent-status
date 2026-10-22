@@ -86,7 +86,7 @@ choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1
     --header='enter: jump | 1-9: jump to row | tab: select | ctrl-x: dismiss selected' \
     --color='fg:-1,bg:-1,fg+:16:bold,bg+:117,hl:25,hl+:25:bold,info:25,prompt:25,pointer:196,marker:28,header:25,border:-1,label:-1' \
     $number_binds \
-    --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($CURRENT_DIR/agent-picker.sh --list '$current_session')")"
+    --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($CURRENT_DIR/agent-picker.sh --list '$current_session')")" || exit 0 # Esc/ctrl-c (130) or no match (1) is a cancel, not an error
 
 [ -z "$choice" ] && exit 0
 
