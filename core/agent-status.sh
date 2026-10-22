@@ -108,12 +108,16 @@ fi
 # $TMUX_PANE is just an inherited env var: a detached background
 # process (e.g. `claude daemon`, spawned from some pane and outliving
 # it) keeps it and would write every one of its own sessions' hooks
-# into that unrelated pane. Only trust it if our controlling tty really
-# is that pane's tty.
-own_tty="$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ' || true)"
+# into that unrelated pane. Only trust it if some ancestor process is
+# attached to that pane's tty - not our own tty: Claude Code runs hooks
+# without a controlling terminal, only the claude process itself has one.
 pane_tty="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null || true)"
-if [ "/dev/$own_tty" != "$pane_tty" ]; then
-    exit 0
-fi
+pid=$$
+while :; do
+    [ "${pid:-0}" -gt 1 ] || exit 0
+    read -r proc_tty ppid < <(ps -o tty=,ppid= -p "$pid" 2>/dev/null) || exit 0
+    [ "/dev/$proc_tty" = "$pane_tty" ] && break
+    pid="$ppid"
+done
 
 agent_status_apply_to_tmux "$TMUX_PANE" "$status" "$tool"
