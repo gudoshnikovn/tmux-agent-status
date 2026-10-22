@@ -13,7 +13,7 @@ CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 list_panes() {
     local current_session="$1"
     local rows filtered rank sorted
-    rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{pane_current_command}')"
+    rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{?#{@agent_status_label},#{@agent_status_label},#{pane_current_command}}')"
 
     filtered="$(printf '%s\n' "$rows" | awk -F'\t' '$1 == "waiting" || $1 == "working" || $1 == "done"')"
     [ -z "$filtered" ] && return 0

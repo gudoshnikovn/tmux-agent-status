@@ -49,11 +49,16 @@ source "$CURRENT_DIR/agent-status-apply.sh"
 
 status=""
 tool=""
+label=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --tool)
             tool="${2:-}"
+            shift 2
+            ;;
+        --label)
+            label="${2:-}"
             shift 2
             ;;
         *)
@@ -100,7 +105,7 @@ if [ "$transport" = "file" ]; then
     mkdir -p "$(dirname "$bridge_file")" 2>/dev/null || true
     # Single short line, well under PIPE_BUF - concurrent appends from
     # multiple panes/containers stay atomic without needing a lock.
-    printf '%s pane=%s status=%s tool=%s\n' "$(date +%s)" "$TMUX_PANE" "$status" "$tool" >> "$bridge_file" 2>/dev/null || true
+    printf '%s pane=%s status=%s tool=%s label=%s\n' "$(date +%s)" "$TMUX_PANE" "$status" "$tool" "$label" >> "$bridge_file" 2>/dev/null || true
     exit 0
 fi
 
@@ -120,4 +125,4 @@ while :; do
     pid="$ppid"
 done
 
-agent_status_apply_to_tmux "$TMUX_PANE" "$status" "$tool"
+agent_status_apply_to_tmux "$TMUX_PANE" "$status" "$tool" "$label"

@@ -95,7 +95,7 @@ files, each with no dependency on the others beyond the shared
 ## Core protocol: `agent-status.sh`
 
 ```
-core/agent-status.sh <working|waiting|done|clear> [--tool <name>]
+core/agent-status.sh <working|waiting|done|clear> [--tool <name>] [--label <text>]
 ```
 
 Reads `$TMUX_PANE` from the inherited environment (the adapter's
@@ -112,6 +112,12 @@ pipes a JSON hook payload doesn't see a broken pipe), and writes:
 - `@agent_status_tool` — only if `--tool` was passed. Display-only
   (the picker could show it); omitting it (e.g. on a bare `clear` call)
   leaves the previous value in place rather than blanking it.
+- `@agent_status_label` — only if `--label <text>` was passed.
+  Display-only: the picker shows it instead of `#{pane_current_command}`.
+  The Claude Code adapter passes the profile dir name (`claude`,
+  `claude-personal`, ...) so panes on different `CLAUDE_CONFIG_DIR`
+  profiles are distinguishable. Also carried by the bridge file
+  (`label=` field).
 
 **`$TMUX_PANE` is verified against the caller's tty (direct transport).**
 `TMUX_PANE` is only an inherited env var. A detached `claude daemon`

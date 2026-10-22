@@ -82,16 +82,18 @@ while true; do
                 pane=""
                 status=""
                 tool=""
+                label=""
                 for field in $line; do
                     case "$field" in
                         pane=*) pane="${field#pane=}" ;;
                         status=*) status="${field#status=}" ;;
                         tool=*) tool="${field#tool=}" ;;
+                        label=*) label="${field#label=}" ;;
                     esac
                 done
 
                 [ -z "$pane" ] && continue
-                agent_status_apply_to_tmux "$pane" "$status" "$tool"
+                agent_status_apply_to_tmux "$pane" "$status" "$tool" "$label"
             done < <(sed -n "$((offset + 1)),${total_lines}p" "$bridge_file")
 
             offset="$total_lines"

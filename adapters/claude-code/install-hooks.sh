@@ -23,6 +23,9 @@ if [ -z "${CLAUDE_SETTINGS_FILE:-}" ]; then
 fi
 
 SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
+# Profile name shown in the picker: ~/.claude -> "claude", ~/.claude-personal -> "claude-personal".
+PROFILE="$(basename "$(dirname "$SETTINGS_FILE")")"
+PROFILE="${PROFILE#.}"
 
 if ! command -v jq >/dev/null 2>&1; then
     echo "tmux-agent-status: jq not found, skipping Claude Code hook install." >&2
@@ -41,10 +44,10 @@ trap 'rm -f "$tmp"' EXIT
 
 jq \
     --arg script "$HOOK_SCRIPT" \
-    --arg working_cmd "$HOOK_SCRIPT working --tool claude-code" \
-    --arg wait_cmd "$HOOK_SCRIPT waiting --tool claude-code" \
-    --arg done_cmd "$HOOK_SCRIPT done --tool claude-code" \
-    --arg clear_cmd "$HOOK_SCRIPT clear --tool claude-code" \
+    --arg working_cmd "$HOOK_SCRIPT working --tool claude-code --label $PROFILE" \
+    --arg wait_cmd "$HOOK_SCRIPT waiting --tool claude-code --label $PROFILE" \
+    --arg done_cmd "$HOOK_SCRIPT done --tool claude-code --label $PROFILE" \
+    --arg clear_cmd "$HOOK_SCRIPT clear --tool claude-code --label $PROFILE" \
     '
     def is_ours: .hooks[0].command != null and (.hooks[0].command | startswith($script));
 

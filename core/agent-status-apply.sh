@@ -18,6 +18,7 @@ agent_status_apply_to_tmux() {
     local pane="$1"
     local status="$2"
     local tool="$3"
+    local label="${4:-}"
 
     [ -z "$pane" ] && return 0
     tmux has-session 2>/dev/null || return 0
@@ -43,6 +44,11 @@ agent_status_apply_to_tmux() {
 
     if [ -n "$tool" ]; then
         tmux set-option -p -t "$pane" @agent_status_tool "$tool" 2>/dev/null || true
+    fi
+
+    # Display-only, e.g. which Claude Code profile (claude vs claude-personal).
+    if [ -n "$label" ]; then
+        tmux set-option -p -t "$pane" @agent_status_label "$label" 2>/dev/null || true
     fi
 
     # The status-line #() summary is a global format, but tmux does not
