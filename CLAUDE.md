@@ -113,6 +113,18 @@ pipes a JSON hook payload doesn't see a broken pipe), and writes:
   (the picker could show it); omitting it (e.g. on a bare `clear` call)
   leaves the previous value in place rather than blanking it.
 
+**`$TMUX_PANE` is verified against the caller's tty (direct transport).**
+`TMUX_PANE` is only an inherited env var. A detached `claude daemon`
+(no tty, parent pid 1) keeps the `TMUX_PANE` of whatever pane spawned
+it, and its hooks then wrote every one of its sessions' statuses into
+that unrelated pane, so the pane showed whichever session fired last.
+Seen live: two `claude` processes with `TMUX_PANE=%15`, one of them the
+daemon. `agent-status.sh` now drops the call unless `ps -o tty= -p $$`
+matches the pane's `#{pane_tty}`. Because of this, internal callers that
+clear *another* pane (the sweep, picker's ctrl-x dismiss) call
+`agent_status_apply_to_tmux` directly instead of going through
+`agent-status.sh`.
+
 ## Crash/liveness sweep (not a timeout)
 
 Every tool has some gap where its "turn ended" hook doesn't fire —
@@ -137,9 +149,9 @@ below), over every pane with a non-empty `@agent_status`. If
 longer matches that tool's `adapters/<tool>/process-pattern` — the
 tool's process is no longer the pane's foreground command, i.e. it
 exited, crashed, or the shell took back over — the status is cleared
-via `agent-status.sh clear` (invoked with `TMUX_PANE` overridden to the
-target pane's `#{pane_id}`, since the sweep itself doesn't run inside
-that pane). Panes where `@agent_status_tool` was never set (e.g. a
+via `agent_status_apply_to_tmux <pane_id> ""` (called directly, not via
+`agent-status.sh`, since the sweep doesn't run inside that pane and
+would fail the tty check above). Panes where `@agent_status_tool` was never set (e.g. a
 manually-set test status, or an adapter that doesn't pass `--tool`)
 are skipped entirely — nothing to compare against.
 

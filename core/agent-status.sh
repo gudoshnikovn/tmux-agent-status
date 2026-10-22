@@ -105,4 +105,15 @@ if [ "$transport" = "file" ]; then
 fi
 
 # transport = direct
+# $TMUX_PANE is just an inherited env var: a detached background
+# process (e.g. `claude daemon`, spawned from some pane and outliving
+# it) keeps it and would write every one of its own sessions' hooks
+# into that unrelated pane. Only trust it if our controlling tty really
+# is that pane's tty.
+own_tty="$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ' || true)"
+pane_tty="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null || true)"
+if [ "/dev/$own_tty" != "$pane_tty" ]; then
+    exit 0
+fi
+
 agent_status_apply_to_tmux "$TMUX_PANE" "$status" "$tool"

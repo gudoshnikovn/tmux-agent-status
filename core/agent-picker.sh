@@ -45,8 +45,10 @@ fi
 
 if [ "${1:-}" = "--dismiss" ]; then
     shift
+    # shellcheck source=./agent-status-apply.sh
+    source "$CURRENT_DIR/agent-status-apply.sh"
     for target in "$@"; do
-        TMUX_PANE="$target" "$CURRENT_DIR/agent-status.sh" clear >/dev/null 2>&1 || true
+        agent_status_apply_to_tmux "$target" "" "" >/dev/null 2>&1 || true
     done
     exit 0
 fi

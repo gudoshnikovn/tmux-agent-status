@@ -27,6 +27,10 @@ set -euo pipefail
 
 CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PLUGIN_ROOT="$(dirname "$CURRENT_DIR")"
+# Applied directly, not via agent-status.sh: that script's tty check
+# would reject us, since we never run inside the pane we're clearing.
+# shellcheck source=./agent-status-apply.sh
+source "$CURRENT_DIR/agent-status-apply.sh"
 
 if ! tmux has-session 2>/dev/null; then
     exit 0
@@ -46,7 +50,7 @@ while IFS=$'\t' read -r pane_id status tool current_command; do
     [ -z "$pattern" ] && continue
 
     if ! printf '%s' "$current_command" | grep -Eq "$pattern"; then
-        TMUX_PANE="$pane_id" "$CURRENT_DIR/agent-status.sh" clear >/dev/null 2>&1 || true
+        agent_status_apply_to_tmux "$pane_id" "" "" >/dev/null 2>&1 || true
     fi
 done <<< "$sweep_rows"
 
