@@ -93,6 +93,7 @@ Set these *before* the plugin line:
 set -g @agent_status_pick_key 'j'          # prefix + j by default
 
 set -g @agent_status_summary 'off'         # disable the status-right counter
+set -g @agent_status_summary_icon_done '#[fg=colour245]✓'  # any text; #[...] styles work here, not in the config file
 set -g @agent_status_notify 'off'          # disable the transient tmux popup
 set -g @agent_status_notify_duration '3000'    # ms the tmux popup stays up
 set -g @agent_status_notify_system 'off'   # disable the macOS notification
@@ -106,6 +107,9 @@ set -g @agent_status_notify_sound_file '/System/Library/Sounds/Glass.aiff'
 |---|---|---|---|
 | `pick_key` | `@agent_status_pick_key` | `j` | Key for `prefix + <key>` picker popup |
 | `summary` | `@agent_status_summary` | `on` | Status-right `⏳2 ⚙️1 ✅3` counter |
+| `summary_icon_waiting` | `@agent_status_summary_icon_waiting` | `⏳` | Counter prefix for waiting panes |
+| `summary_icon_working` | `@agent_status_summary_icon_working` | `⚙️` | Counter prefix for working panes |
+| `summary_icon_done` | `@agent_status_summary_icon_done` | `✅` | Counter prefix for done panes |
 | `notify` | `@agent_status_notify` | `on` | Transient tmux popup on waiting/done |
 | `notify_duration` | `@agent_status_notify_duration` | `3000` | ms the tmux popup stays up |
 | `notify_system` | `@agent_status_notify_system` | `on` if `osascript` exists | macOS notification-center alert |

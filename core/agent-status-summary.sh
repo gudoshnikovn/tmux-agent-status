@@ -56,7 +56,13 @@ done <<< "$sweep_rows"
 
 # --- 2. Persistent summary --------------------------------------------
 
-summary_enabled="$(tmux show-option -gqv @agent_status_summary 2>/dev/null || true)"
+# One tmux round-trip for all options - this runs on every status refresh.
+# \x1f, not tab: read collapses runs of whitespace IFS, so an unset
+# option between two tabs would shift every later field.
+sep=$'\x1f'
+IFS="$sep" read -r summary_enabled icon_waiting icon_working icon_done < <(
+    tmux display-message -p "#{@agent_status_summary}${sep}#{@agent_status_summary_icon_waiting}${sep}#{@agent_status_summary_icon_working}${sep}#{@agent_status_summary_icon_done}" 2>/dev/null || true
+) || true
 [ "$summary_enabled" = "off" ] && exit 0
 
 rows="$(tmux list-panes -a -F '#{@agent_status}' 2>/dev/null || true)"
@@ -66,8 +72,8 @@ working="$(printf '%s\n' "$rows" | grep -c '^working$' || true)"
 done_count="$(printf '%s\n' "$rows" | grep -c '^done$' || true)"
 
 out=""
-[ "$waiting" -gt 0 ] && out="${out}⏳${waiting} "
-[ "$working" -gt 0 ] && out="${out}⚙️${working} "
-[ "$done_count" -gt 0 ] && out="${out}✅${done_count} "
+[ "$waiting" -gt 0 ] && out="${out}${icon_waiting:-⏳}${waiting} "
+[ "$working" -gt 0 ] && out="${out}${icon_working:-⚙️}${working} "
+[ "$done_count" -gt 0 ] && out="${out}${icon_done:-✅}${done_count} "
 
 printf '%s' "$out"

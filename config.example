@@ -13,6 +13,11 @@
 
 # status-right "⏳2 ⚙️1 ✅3" counter - "off" to disable
 # summary = on
+# counter prefixes; plain text only here ('#' starts a comment) - use
+# `set -g` in .tmux.conf for #[fg=...] styled icons
+# summary_icon_waiting = ⏳
+# summary_icon_working = ⚙️
+# summary_icon_done = ✅
 
 # transient tmux popup on waiting/done transitions - "off" to disable
 # notify = on
