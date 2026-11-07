@@ -202,6 +202,22 @@ press 3
 nap 0.5
 [ "$(current)" = "$third_row" ] || fail "3 should go to the third pane"
 back_home
+
+# Typing narrows rows and headings together, and clearing brings them back.
+open
+"${outer[@]}" send-keys -l second
+appears 'second (zsh)' || fail "search did not find the window"
+nap 0.5
+screen | grep -q '▌ *aaa ' && fail "a session with no match should lose its heading"
+screen | grep -q '▌ *main ' || fail "a session with a match should keep its heading"
+[ "$(screen | grep -c 'first (zsh)')" = 0 ] || fail "non-matching pane still listed"
+press C-u
+appears '▌ *aaa ' || fail "clearing the query should bring headings back"
+press Escape
+open
+"${outer[@]}" send-keys -l aaa
+nap 0.8
+[ "$(pick)" = "$a_pane" ] || fail "enter on a session search should open its pane"
 tmux set-option -gu @agent_status_view
 
 # An fzf without these flags must still get a working, static picker.

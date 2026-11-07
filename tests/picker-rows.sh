@@ -76,4 +76,18 @@ printf '%s\n' "$flat" | grep '^→' | grep -q 'busy:1.1' || fail "flat view: mar
 elsewhere="$(PATH="$TMP:$PATH" "$ROOT/core/agent-picker.sh" --list busy:9.9 | sed $'s/\033\\[[0-9;]*m//g')"
 printf '%s\n' "$elsewhere" | grep -q '^→' && fail "invoked from a pane with no agent: no marker at all"
 [ "$(tr '\n' ' ' < "$TMP/view.positions")" = "2 4 5 7 9 11 13 " ] || fail "positions must point at panes: $(tr '\n' ' ' < "$TMP/view.positions")"
+search() { PATH="$TMP:$PATH" "$ROOT/core/agent-picker.sh" --list none "" "$TMP/view" "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
+found="$(search busy)"
+[ "$(printf '%s\n' "$found" | awk -F'\t' '$2 !~ /^=/' | wc -l | tr -d ' ')" = 2 ] || fail "a session name should find all its panes: $found"
+printf '%s\n' "$found" | grep -q '^  busy ' || fail "the session's heading should stay"
+printf '%s\n' "$found" | awk -F'\t' '$2 !~ /^=/ { print $1 }' | grep -q 'busy' && fail "pane rows should not print the session name: $found"
+found="$(search w2)"
+[ "$(printf '%s\n' "$found" | awk -F'\t' '$2 ~ /^=/' | wc -l | tr -d ' ')" = 1 ] || fail "only headings with a matching pane should stay: $found"
+[ "$(printf '%s\n' "$found" | awk -F'\t' '$2 !~ /^=/' | wc -l | tr -d ' ')" = 1 ] || fail "a window name should narrow to its pane: $found"
+printf '%s\n' "$found" | grep -q '^  busy ' || fail "w2 belongs to busy: $found"
+[ -z "$(search zzzqqq)" ] || fail "no match should list nothing, not even headings"
+search permission | grep -q '^  ask ' || fail "the waiting reason should be searchable"
+search idle | grep -q '^  seen ' || fail "the shown status should be searchable"
+[ "$(tr '\n' ' ' < "$TMP/view.positions")" = "2 " ] || fail "positions must follow the filtered list: $(tr '\n' ' ' < "$TMP/view.positions")"
+
 echo "ok: picker rows"

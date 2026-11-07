@@ -45,6 +45,8 @@ see "Adding a new tool" below.
   tmux sessions (via [`fzf`](https://github.com/junegunn/fzf)), needs-you first,
   with how long each status has held, why a pane is waiting, and a preview of
   the pane. Rows and preview update live while it's open, and rows keep their place until you reopen it. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
+- **Search**: type to filter by session, window, agent, status or waiting reason.
+  In the grouped view a session stays only if one of its panes matches.
 - **Two views**: `ctrl-s` in the picker switches between the flat needs-you-first
   list and one grouped by session, alphabetically, with a status rollup per session.
   Set the default with `view`.

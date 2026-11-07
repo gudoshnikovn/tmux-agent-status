@@ -493,8 +493,13 @@ every `focus` and `load` event `core/picker-skip-heading.sh` moves the cursor of
 direction of travel. Don't turn headings into the first line of a multi-line `--read0`
 item: tried, and fzf highlights the whole item, title included. Only panes get numbers,
 so the 1-9 keys look up their list position in `<view file>.positions`, which every
-`--list` rewrites. Headings still count in fzf's own `N/M` info. Pane rows repeat the
-session name, dimmed, because fzf can only search displayed text.
+`--list` rewrites. Headings still count in fzf's own `N/M` info.
+
+Search doesn't use fzf's own matching (`--disabled`): every query change reloads `--list`
+with `{q}`, which runs `fzf --filter` over each pane's own text (session, window, agent,
+shown status, reason) before rendering. So a session name finds all its panes without
+being on their rows, and a heading exists only if a pane of its session matched. The price
+is no match highlighting in the list.
 
 Icons live in `agent_status_load_icons` (`@agent_status_icons`, `minimal` by default). Keep
 a theme's icons one width, or picker columns drift. The counter deliberately shows only

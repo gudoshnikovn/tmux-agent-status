@@ -108,8 +108,8 @@ render_status() {
 
 # A heading per session, then its panes. fzf has no unselectable rows, so a heading
 # is a row with target "=<first pane>" that picker-skip-heading.sh keeps the cursor
-# off, and only panes get numbers. Pane rows repeat the session name, dimmed, so
-# searching by session still finds them.
+# off, and only panes get numbers. Search runs before this, so a heading exists only
+# if one of its panes matched.
 render_session() {
     render_awk "$1" '
     {
@@ -130,7 +130,7 @@ render_session() {
         return out;
     }
     END {
-        fmt = "%s%s%s %s %3s | %-" pane_w "s | %s (%s)%s \033[2m%s\033[0m%s\t%s\n";
+        fmt = "%s%s%s %s %3s | %-" pane_w "s | %s (%s)%s%s\t%s\n";
         for (n = 1; n <= NR; n++) {
             split(line[n], f, "\t");
             s = sess[n];
@@ -141,9 +141,24 @@ render_session() {
             set_status_cell(f[1], f[6]);
             why = (f[7] != "") ? " · " f[7] : "";
             marker = (f[3] == cur) ? "\033[1;32m→\033[0m" : " ";
-            printf fmt, marker, dim, (n <= 9) ? n : " ", cell, age(f[2]), pane[n], f[4], f[5], why, s, (dim != "") ? "\033[0m" : "", f[3];
+            printf fmt, marker, dim, (n <= 9) ? n : " ", cell, age(f[2]), pane[n], f[4], f[5], why, (dim != "") ? "\033[0m" : "", f[3];
         }
     }'
+}
+
+# Keeps the rows matching the picker's query, in order. fzf only filters what it's given,
+# so searching happens here, on each pane's own text, not on the rendered list: a session
+# name finds all its panes without being on their rows, and headings can't match.
+filter_rows() {
+    local query="$1"
+    if [ -z "$query" ]; then
+        cat
+        return 0
+    fi
+    awk -F'\t' '{
+        state = ($1 == "done" && $6 != "") ? "idle" : $1;
+        print $3 " " $4 " " $5 " " state " " $7 "\t" $0;
+    }' | { fzf --filter="$query" --no-sort --delimiter='\t' --nth=1 || true; } | cut -f2-
 }
 
 list_panes() {
@@ -151,6 +166,7 @@ list_panes() {
     local order_file="${2:-}"
     local view="${3:-}"
     local positions_file="${4:-}"
+    local query="${5:-}"
     local rows filtered rank sorted out
     [ -n "$view" ] || view="$(configured_view)"
     rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{?#{@agent_status_label},#{@agent_status_label},#{pane_current_command}}	#{@agent_status_seen}	#{@agent_status_message}	#{pane_tty}	#{@agent_status_tool}')"
@@ -177,10 +193,12 @@ list_panes() {
         sorted="$(printf '%s\n' "$sorted" | awk -F'\t' 'NR == FNR { place[$1] = FNR; next } { print (($3 in place) ? place[$3] : 999999) "\t" $0 }' "$order_file" - | sort -s -t'	' -k1,1n | cut -f2-)"
     fi
 
-    out="$(printf '%s\n' "$sorted" | order_view "$view" | "render_$view" "$current_pane")"
+    sorted="$(printf '%s\n' "$sorted" | filter_rows "$query")"
+    out=""
+    [ -z "$sorted" ] || out="$(printf '%s\n' "$sorted" | order_view "$view" | "render_$view" "$current_pane")"
     # Which list position the Nth numbered row sits at, for the 1-9 keys.
-    [ -z "$positions_file" ] || printf '%s\n' "$out" | awk -F'\t' '$2 !~ /^=/ { print NR }' > "$positions_file"
-    printf '%s\n' "$out"
+    [ -z "$positions_file" ] || printf '%s\n' "$out" | awk -F'\t' 'NF > 1 && $2 !~ /^=/ { print NR }' > "$positions_file"
+    [ -z "$out" ] || printf '%s\n' "$out"
 }
 
 jump_to() {
@@ -210,7 +228,7 @@ jump_next() {
 }
 
 if [ "${1:-}" = "--list" ]; then
-    list_panes "${2:-}" "${3:-}" "$(cat "${4:-/dev/null}" 2>/dev/null || true)" "${4:+$4.positions}"
+    list_panes "${2:-}" "${3:-}" "$(cat "${4:-/dev/null}" 2>/dev/null || true)" "${4:+$4.positions}" "${5:-}"
     exit 0
 fi
 
@@ -259,7 +277,7 @@ order_file="$live_dir/order"
 printf '%s\n' "$formatted" | cut -f2 > "$order_file"
 view_file="$live_dir/view"
 configured_view > "$view_file"
-list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_pane' '$order_file' '$view_file'"
+list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_pane' '$order_file' '$view_file' {q}"
 formatted="$(list_panes "$current_pane" "$order_file" "$(cat "$view_file")" "$view_file.positions")"
 
 # Display only, never parsed: drops trailing blank lines so "follow" lands on the
@@ -305,7 +323,8 @@ if command -v curl >/dev/null 2>&1 && [ "$fzf_status" -ne 2 ]; then
     refresher=$!
 fi
 
-choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1 --ansi \
+choice="$(printf '%s\n' "$formatted" | fzf --multi --disabled --delimiter='\t' --with-nth=1 --ansi \
+    --bind "change:reload-sync($list_cmd)+first" \
     --prompt="agent panes> " --reverse \
     --preview="$preview" --preview-window="down:${preview_size:-75%}:follow:border-top" \
     --header=$'enter: jump | 1-9: jump to row | ctrl-j/k, ↓/↑: move | esc/ctrl-q: exit\ntab: select | ctrl-x: dismiss selected | ctrl-r: refresh | ctrl-s: switch view' \
