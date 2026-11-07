@@ -78,9 +78,10 @@ function set_status_cell(status, seen) {
 }
 '
 
-# Flat list, needs-you first. Rows in the session we were invoked from get a green
-# "→" marker (ANSI, relies on --ansi in the fzf invocation below). Several agent
-# panes in one session get a "[i/N]" badge so it's obvious they're siblings.
+# Flat list, needs-you first. The pane we were invoked from gets a green "→" marker
+# (ANSI, relies on --ansi in the fzf invocation below); no marker if that pane has no
+# agent. Several agent panes in one session get a "[i/N]" badge so it's obvious
+# they're siblings.
 render_status() {
     render_awk "$1" '
     { line[NR] = $0; s = $3; sub(/:.*/, "", s); sess[NR] = s; total[s]++ }
@@ -98,7 +99,7 @@ render_status() {
             split(line[n], f, "\t");
             set_status_cell(f[1], f[6]);
             num = (n <= 9) ? n : " ";
-            marker = (sess[n] == cur) ? "\033[1;32m→\033[0m" : " ";
+            marker = (f[3] == cur) ? "\033[1;32m→\033[0m" : " ";
             why = (f[7] != "") ? " · " f[7] : "";
             printf fmt, marker, dim, num, cell, age(f[2]), f[3], badge[n], f[4], f[5], why, (dim != "") ? "\033[0m" : "", f[3];
         }
@@ -129,24 +130,24 @@ render_session() {
         return out;
     }
     END {
-        fmt = " %s%s %s %3s | %-" pane_w "s | %s (%s)%s \033[2m%s\033[0m%s\t%s\n";
+        fmt = "%s%s%s %s %3s | %-" pane_w "s | %s (%s)%s \033[2m%s\033[0m%s\t%s\n";
         for (n = 1; n <= NR; n++) {
             split(line[n], f, "\t");
             s = sess[n];
             if (s != prev) {
-                marker = (s == cur) ? "\033[1;32m→\033[0m" : " ";
-                printf "%s \033[1m%s\033[0m%s\t=%s\n", marker, s, rollup(s), first[s];
+                printf "  \033[1m%s\033[0m%s\t=%s\n", s, rollup(s), first[s];
                 prev = s;
             }
             set_status_cell(f[1], f[6]);
             why = (f[7] != "") ? " · " f[7] : "";
-            printf fmt, dim, (n <= 9) ? n : " ", cell, age(f[2]), pane[n], f[4], f[5], why, s, (dim != "") ? "\033[0m" : "", f[3];
+            marker = (f[3] == cur) ? "\033[1;32m→\033[0m" : " ";
+            printf fmt, marker, dim, (n <= 9) ? n : " ", cell, age(f[2]), pane[n], f[4], f[5], why, s, (dim != "") ? "\033[0m" : "", f[3];
         }
     }'
 }
 
 list_panes() {
-    local current_session="$1"
+    local current_pane="$1"
     local order_file="${2:-}"
     local view="${3:-}"
     local positions_file="${4:-}"
@@ -176,7 +177,7 @@ list_panes() {
         sorted="$(printf '%s\n' "$sorted" | awk -F'\t' 'NR == FNR { place[$1] = FNR; next } { print (($3 in place) ? place[$3] : 999999) "\t" $0 }' "$order_file" - | sort -s -t'	' -k1,1n | cut -f2-)"
     fi
 
-    out="$(printf '%s\n' "$sorted" | order_view "$view" | "render_$view" "$current_session")"
+    out="$(printf '%s\n' "$sorted" | order_view "$view" | "render_$view" "$current_pane")"
     # Which list position the Nth numbered row sits at, for the 1-9 keys.
     [ -z "$positions_file" ] || printf '%s\n' "$out" | awk -F'\t' '$2 !~ /^=/ { print NR }' > "$positions_file"
     printf '%s\n' "$out"
@@ -243,9 +244,8 @@ if ! command -v fzf >/dev/null 2>&1; then
 fi
 
 current_pane="${1:-}"
-current_session="${current_pane%%:*}"
 
-formatted="$(list_panes "$current_session" "" status)"
+formatted="$(list_panes "$current_pane" "" status)"
 
 if [ -z "$formatted" ]; then
     tmux display-message "agent-status: no active panes"
@@ -259,8 +259,8 @@ order_file="$live_dir/order"
 printf '%s\n' "$formatted" | cut -f2 > "$order_file"
 view_file="$live_dir/view"
 configured_view > "$view_file"
-list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_session' '$order_file' '$view_file'"
-formatted="$(list_panes "$current_session" "$order_file" "$(cat "$view_file")" "$view_file.positions")"
+list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_pane' '$order_file' '$view_file'"
+formatted="$(list_panes "$current_pane" "$order_file" "$(cat "$view_file")" "$view_file.positions")"
 
 # Display only, never parsed: drops trailing blank lines so "follow" lands on the
 # prompt. Noting the target tells the refresher below which pane is on show.

@@ -110,7 +110,7 @@ screen | grep -q 'agent panes>' && fail "ctrl-q was swallowed during a reload"
 rm -f "$TMP/bin/ps"
 
 # ctrl-s switches views in the open picker; closing it goes back to the default.
-heading='→ main '
+heading='▌ *main '
 press C-b j
 appears 'agent panes>' || fail "popup did not reopen"
 screen | grep -q "$heading" && fail "session headings before switching"
@@ -126,6 +126,27 @@ press C-b j
 appears 'agent panes>' || fail "popup did not reopen"
 screen | grep -q "$heading" && fail "closing the picker should reset the view"
 press Escape
+
+# The arrow marks the invoking pane, in both views, and nothing from a pane with no agent.
+tmux select-window -t main:0
+arrows() { screen | grep -c '→' || true; }
+press C-b j
+appears 'agent panes>' || fail "popup did not reopen"
+nap 0.3
+[ "$(arrows)" = 0 ] || fail "invoked from a plain shell: expected no arrow, got $(arrows)"
+press Escape
+tmux select-window -t "$c"
+nap 0.2
+for keys in "" C-s; do
+    press C-b j
+    appears 'agent panes>' || fail "popup did not reopen"
+    if [ -n "$keys" ]; then press "$keys"; appears "$heading" || fail "no session view"; fi
+    nap 0.3
+    [ "$(arrows)" = 1 ] || fail "invoked from an agent pane${keys:+ ($keys)}: expected one arrow, got $(arrows)"
+    screen | grep '→' | grep -q 'second' || fail "arrow on the wrong row${keys:+ ($keys)}"
+    press Escape
+done
+tmux select-window -t main:0
 
 # Grouped: the cursor and 1-9 reach panes only, in both directions, and the
 # highlight stays off headings. Rows: aaa heading, a, main heading, then two panes.
@@ -151,7 +172,7 @@ screen_e | grep 'aaa' | head -1 | grep -q '48;5;117' && fail "highlight spilled 
 
 open
 press C-j
-screen_e | grep '→.*main' | head -1 | grep -q '48;5;117' && fail "highlight spilled onto the heading of the selected pane"
+screen_e | grep -F '[1mmain' | head -1 | grep -q '48;5;117' && fail "highlight spilled onto the heading of the selected pane"
 [ "$(pick)" = "$second_row" ] || fail "ctrl-j should cross the heading to the next session's pane"
 
 open
