@@ -10,15 +10,23 @@
 #     directly (see README's "Agent running in a container/VM/remote
 #     host" section).
 #
-# Defines agent_status_apply_to_tmux <pane_id> <status> <tool> and
-# nothing else - no top-level code, no `set -e` (the sourcing script
+# Defines agent_status_pane_focused <pane_id> and
+# agent_status_apply_to_tmux <pane_id> <status> <tool> [label] [message]
+# and nothing else - no top-level code, no `set -e` (the sourcing script
 # owns its own shell options).
+
+# True when a client whose terminal has OS focus is showing this pane.
+agent_status_pane_focused() {
+    tmux list-clients -F '#{client_flags}	#{pane_id}' 2>/dev/null |
+        awk -F'\t' -v pane="$1" '$2 == pane && $1 ~ /focused/ { found = 1 } END { exit !found }'
+}
 
 agent_status_apply_to_tmux() {
     local pane="$1"
     local status="$2"
     local tool="$3"
     local label="${4:-}"
+    local message="${5:-}"
 
     [ -z "$pane" ] && return 0
     tmux has-session 2>/dev/null || return 0
@@ -40,7 +48,26 @@ agent_status_apply_to_tmux() {
             ;;
     esac
 
-    tmux set-option -p -t "$pane" @agent_status_updated_at "$(date +%s)" 2>/dev/null || true
+    # Only real transitions: this drives the picker's age column, and
+    # @agent_status_seen must survive a same-status re-fire (idle_prompt).
+    if [ "$status" != "$prev_status" ]; then
+        tmux set-option -p -t "$pane" @agent_status_updated_at "$(date +%s)" 2>/dev/null || true
+        tmux set-option -pu -t "$pane" @agent_status_seen 2>/dev/null || true
+    fi
+
+    # Why this status, e.g. "permission: Bash". Stale once the status moves on.
+    if [ -n "$message" ]; then
+        tmux set-option -p -t "$pane" @agent_status_message "$message" 2>/dev/null || true
+    else
+        tmux set-option -pu -t "$pane" @agent_status_message 2>/dev/null || true
+    fi
+
+    local focused=""
+    if agent_status_pane_focused "$pane"; then
+        focused=1
+        # Finished right in front of you: nothing left to notice.
+        [ "$status" = "done" ] && tmux set-option -p -t "$pane" @agent_status_seen 1 2>/dev/null || true
+    fi
 
     if [ -n "$tool" ]; then
         tmux set-option -p -t "$pane" @agent_status_tool "$tool" 2>/dev/null || true
@@ -58,11 +85,12 @@ agent_status_apply_to_tmux() {
 
     # Transient "psst, look over here" notification: only on a real
     # transition into waiting/done (not a same-status re-fire, and not
-    # on "working" - that would fire on every single tool call). Opt
-    # out with `set -g @agent_status_notify off`.
+    # on "working" - that would fire on every single tool call), and
+    # not for a pane you're looking at. Opt out with
+    # `set -g @agent_status_notify off`.
     local notify_enabled
     notify_enabled="$(tmux show-option -gqv @agent_status_notify 2>/dev/null || true)"
-    if [ "$notify_enabled" != "off" ] && [ "$status" != "$prev_status" ] && { [ "$status" = "waiting" ] || [ "$status" = "done" ]; }; then
+    if [ -z "$focused" ] && [ "$notify_enabled" != "off" ] && [ "$status" != "$prev_status" ] && { [ "$status" = "waiting" ] || [ "$status" = "done" ]; }; then
         local duration location icon
         duration="$(tmux show-option -gqv @agent_status_notify_duration 2>/dev/null || true)"
         [ -z "$duration" ] && duration=3000

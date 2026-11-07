@@ -1,0 +1,12 @@
+# Why these events and matchers: see "The Claude Code adapter" in CLAUDE.md.
+# event            matcher      status
+UserPromptSubmit   -            working
+PreToolUse         -            working
+PermissionRequest  -            waiting
+PostToolUse        -            working
+Notification       idle_prompt  done
+Stop               -            done
+Elicitation        -            waiting
+ElicitationResult  -            working
+StopFailure        -            done
+SessionEnd         -            clear

@@ -83,7 +83,10 @@ while true; do
                 status=""
                 tool=""
                 label=""
-                for field in $line; do
+                # Free text, always the last field: must not be word-split.
+                message=""
+                case "$line" in *" message="*) message="${line#* message=}" ;; esac
+                for field in ${line%% message=*}; do
                     case "$field" in
                         pane=*) pane="${field#pane=}" ;;
                         status=*) status="${field#status=}" ;;
@@ -93,7 +96,7 @@ while true; do
                 done
 
                 [ -z "$pane" ] && continue
-                agent_status_apply_to_tmux "$pane" "$status" "$tool" "$label"
+                agent_status_apply_to_tmux "$pane" "$status" "$tool" "$label" "$message"
             done < <(sed -n "$((offset + 1)),${total_lines}p" "$bridge_file")
 
             offset="$total_lines"
