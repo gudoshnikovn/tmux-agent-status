@@ -11,6 +11,12 @@
 # prefix + j by default
 # pick_key = j
 
+# prefix + J by default: jump to the next pane that needs you
+# next_key = J
+
+# process names shown in the picker as "no hooks" when they haven't reported
+# agents = claude codex gemini kimi opencode hermes aider cursor-agent copilot droid qwen grok pi amp
+
 # status-right "⏳2 ⚙️1 ✅3" counter - "off" to disable
 # summary = on
 # counter prefixes; plain text only here ('#' starts a comment) - use

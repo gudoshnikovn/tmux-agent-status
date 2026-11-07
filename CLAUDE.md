@@ -17,12 +17,19 @@ core/
   agent-status.sh          # generic reporter: writes @agent_status + does the tmux side-effects
   agent-picker.sh          # prefix+j popup: lists panes, fzf-picks, jumps
   agent-status-summary.sh  # #() status-right widget: crash sweep + counts panes per state
+  agent-status-seen.sh     # tmux focus hooks: marks a finished pane seen
+  install-json-hooks.sh    # shared installer: hooks.map -> Claude-style JSON hook config
   load-config.sh           # fills @agent_status_* defaults from ~/.config/tmux-agent-status/config
 adapters/
   claude-code/
     detect.sh                # exit 0 if Claude Code looks usable on this machine
-    install-hooks.sh         # merges our hook entries into ~/.claude/settings.json
+    install-hooks.sh         # merges hooks.map into ~/.claude/settings.json and profiles
+    hooks.map                # event -> status table
+    hook.sh                  # refines the status from the hook payload, then calls core
     process-pattern          # regex for the crash/liveness sweep
+  gemini/, codex/            # detect.sh, install-hooks.sh, hooks.map, process-pattern
+  kimi/                      # same, but a managed block in config.toml
+  opencode/                  # same, but a TUI plugin (tui.js) registered in cli.json
   hermes/
     detect.sh
     install-hooks.sh         # merges shell hooks into ~/.hermes/config.yaml
@@ -30,7 +37,8 @@ adapters/
 tmux/
   agent-status.tmux        # real entry point: status-right wiring, keybind, adapter loop
 tests/
-  picker-alignment.sh      # picker columns stay aligned (fake tmux, no server needed)
+  *.sh                     # run all: for t in tests/*.sh; do "$t"; done
+  lib/tmux.sh              # private tmux server + real attached client for tests
 agent_status.tmux          # root-level shim - see below
 ```
 
@@ -53,7 +61,8 @@ this slip through once already.
 
 **Core is tool-agnostic. Adapters are the only tool-specific code.**
 Nothing under `core/` parses any tool's native hook payload or knows
-its event names — it only reads/writes the tmux pane user option
+its event names (`install-json-hooks.sh` only copies them from an adapter's
+table) — it only reads/writes the tmux pane user option
 `@agent_status` (`working`/`waiting`/`done`/``) and
 `@agent_status_tool` (which adapter set it, display-only). Adding
 support for a new tool means adding `adapters/<tool>/` with the three
@@ -69,9 +78,9 @@ the same way for the popup.
 
 ## Adapter contract
 
-Every `adapters/<tool>/` directory must provide exactly these three
-files, each with no dependency on the others beyond the shared
-`core/agent-status.sh` call:
+Every `adapters/<tool>/` directory must provide these three files, each
+with no dependency on the others beyond the shared `core/agent-status.sh`
+call (most also keep their event table in a `hooks.map`):
 
 - `detect.sh` — no args, no side effects, exit 0 if the tool looks
   usable on this machine (binary on `PATH`, config dir exists, etc.),
@@ -81,8 +90,9 @@ files, each with no dependency on the others beyond the shared
   tool's own native format, each one invoking
   `core/agent-status.sh <working|waiting|done|clear> --tool <tool-dir-name>`.
   Must tolerate being run on every reload without accumulating
-  duplicate entries (see the Claude Code adapter's dedup strategy
-  below — copy that pattern for new adapters).
+  duplicate entries, and remove its entries on `--uninstall` (Hermes keeps
+  a separate `uninstall-hooks.sh`). Claude-style JSON configs get all of
+  this from `core/install-json-hooks.sh`.
 - `process-pattern` — a single-line regex matched against
   `#{pane_current_command}`, used only by the crash/liveness sweep in
   `core/agent-status-summary.sh` (see below). Get this wrong (too
@@ -97,7 +107,7 @@ files, each with no dependency on the others beyond the shared
 ## Core protocol: `agent-status.sh`
 
 ```
-core/agent-status.sh <working|waiting|done|clear> [--tool <name>] [--label <text>]
+core/agent-status.sh <working|waiting|done|clear> [--tool <name>] [--label <text>] [--message <text>]
 ```
 
 Reads `$TMUX_PANE` from the inherited environment (the adapter's
@@ -106,8 +116,8 @@ invoked from a shell inside a tmux pane), drains stdin (so a tool that
 pipes a JSON hook payload doesn't see a broken pipe), and writes:
 
 - `@agent_status` — the status itself.
-- `@agent_status_updated_at` — epoch seconds of this write. Currently
-  only for observability (e.g. "how long has this pane said waiting");
+- `@agent_status_updated_at` — epoch seconds of the last real transition
+  (same-status re-fires don't move it). Drives the picker's age column;
   the crash/liveness sweep deliberately does **not** key off this (see
   "Crash/liveness sweep" below for why a wall-clock timeout was
   rejected).
@@ -120,6 +130,15 @@ pipes a JSON hook payload doesn't see a broken pipe), and writes:
   `claude-personal`, ...) so panes on different `CLAUDE_CONFIG_DIR`
   profiles are distinguishable. Also carried by the bridge file
   (`label=` field).
+
+- `@agent_status_message` — why this status, e.g. `permission: Bash`.
+  Replaced on every write, so it can't outlive the status. Display-only,
+  except that `adapters/claude-code/hook.sh` reads its `subagent ` prefix.
+- `@agent_status_seen` — `1` once a focused client has shown a `done` pane.
+  Set by `core/agent-status-seen.sh` from tmux hooks, or at once if the pane
+  is focused when it finishes. Cleared on every real transition. `@agent_status`
+  stays `done`, so the pane keeps its picker row and the sweep still covers it;
+  the picker shows it as `idle` and the counter skips it.
 
 **`$TMUX_PANE` is verified against the caller's tty (direct transport).**
 `TMUX_PANE` is only an inherited env var. A detached `claude daemon`
@@ -204,6 +223,27 @@ than trusting this list to be exhaustive forever.
 | `ElicitationResult` | — | `working` | You answered the elicitation. Mirrors `PostToolUse`'s job of clearing `waiting`. |
 | `StopFailure` | — | `done` | Turn ended via API error (`rate_limit`, `overloaded`, `billing_error`, etc), not a normal response. `Stop` does not fire in this case - same class of gap as the interrupt gotcha below, except there's no `idle_prompt` fallback lag tradeoff here worth accepting since this is just as easy to hook directly. |
 | `SessionEnd` | — | `clear` (`""`) | The Claude Code *session* ended (`/exit`, `logout`, etc) - as opposed to a turn ending. Without this, a tmux pane that outlives the Claude Code process sits on whatever color it last had, forever. |
+
+### Payload-based refinements (`adapters/claude-code/hook.sh`)
+
+`hooks.map` gives the status per event; `hook.sh` then adjusts it from the
+payload. Verified by driving a real session in a private tmux server and
+logging every event (2026-11-07):
+
+- **Background subagents.** `Stop` fires while one is still running, and
+  the session wakes itself when it ends, so a plain `Stop -> done` announced
+  `done` twice with `working` in between. With a running `subagent` or
+  `workflow` in `background_tasks`, `Stop` stays `working` (`idle_prompt`
+  still heals it if the task hangs). Background `shell` tasks deliberately
+  still end the turn: a dev server never finishes, and the pane would read
+  `working` forever.
+- **Subagent tool events.** They carry `agent_id` and arrive after the main
+  turn's `Stop` and during its permission prompts. They're dropped unless the
+  pane is on a prompt that a subagent raised (marked by the `subagent ` message
+  prefix), so they can neither revive a finished pane nor clear your prompt.
+- **`AskUserQuestion` needs nothing special.** `PermissionRequest` fires for it
+  in interactive sessions, so it already reads `waiting`. muxa and herdr special-case
+  it for other agents; Kimi's `hooks.map` does need that.
 
 ### The "waiting doesn't clear" gotcha (PreToolUse vs PostToolUse)
 
@@ -415,6 +455,29 @@ present, and otherwise prints the YAML block to add manually rather
 than failing the tmux reload — same graceful-degradation shape as the
 Claude Code adapter's `jq`-missing path.
 
+## The other presets
+
+**Kimi Code** (`hooks.map` derived from herdr's integration, then verified live
+on 2.5.1): `PermissionResult` clears `waiting` as soon as you approve, and
+`Interrupt` gives `done` at once, so neither Claude gotcha applies. It has no
+session-end event in the table; the sweep clears exited panes.
+
+**OpenCode 2** (`tui.js`, verified live on 2.2.0 for working, interrupt, retry
+and exit; permission prompts were not exercised because the configured provider
+was unreachable). It must be a TUI plugin: `opencode serve --service` is one
+shared background process with no tty or `$TMUX_PANE`, whose events cover every
+pane's sessions, so the plugin filters to the session tree this pane has
+selected. The V2 entry point is `setup(api)` with `api.data.listen`; a V1-style
+`tui` export fails with "Invalid V2 TUI plugin module". Install skips machines
+without `cli.json`: creating it would skip OpenCode's own V1 settings migration.
+
+**Gemini CLI and Codex** follow their hook docs and are tested only for installing
+cleanly: Gemini wasn't logged in and Codex wasn't installed. `process-pattern` for
+Gemini was confirmed (`#{pane_current_command}` is `node`). Gemini documents no
+event for approval resolving, interrupts or API errors, so those panes can stick
+until the next turn or process exit. Codex's `SessionEnd`/`Interrupt` default to a
+1s timeout, and setting a longer one prints a warning, so `hooks.map` sets none.
+
 ## Forced redraw + transient notification (agent-status.sh side effects)
 
 Two things happen in `agent-status.sh` beyond writing `@agent_status`:
@@ -435,7 +498,10 @@ Two things happen in `agent-status.sh` beyond writing `@agent_status`:
    `@agent_status` value (read via `show-option` before overwriting)
    differs from the new one — this is what stops the recurring
    `idle_prompt` Notification (fires every ~60s while still idle) from
-   re-popping the same message repeatedly. Opt out with
+   re-popping the same message repeatedly. All notifications are skipped when
+   a client with OS focus is showing the pane (`#{client_flags}` contains
+   `focused`), not merely when it's the active pane: a pane finishing while
+   you're in a browser must still alert. Opt out with
    `set -g @agent_status_notify off`; duration is
    `@agent_status_notify_duration` in ms (default 3000).
 
@@ -475,32 +541,30 @@ above) also forces the client's full screen — status line included —
 to redraw immediately. One refresh call covers the counter *and* the
 crash/liveness sweep (which lives in the same script, see above).
 
-## install-hooks.sh: how the Claude Code merge works
+## install-json-hooks.sh: how the merge works
 
-`adapters/claude-code/install-hooks.sh` edits `~/.claude/settings.json`
-(or `$CLAUDE_SETTINGS_FILE` for testing) with `jq`, and must stay
-**additive** — it runs on every tmux config reload
-(`tmux/agent-status.tmux` calls every detected adapter's
-`install-hooks.sh` unconditionally), so it has to be idempotent against
-a settings file that may have unrelated hooks from other tools.
+`core/install-json-hooks.sh` edits a JSON hook config with `jq` from an
+adapter's `hooks.map`, and must stay **additive** — it runs on every tmux
+config reload (`tmux/agent-status.tmux` calls every detected adapter's
+`install-hooks.sh` unconditionally), so it has to be idempotent against a
+settings file that may have unrelated hooks from other tools.
 
-Without `$CLAUDE_SETTINGS_FILE` it also merges into every existing
-`~/.claude-*/settings.json`: a Claude started with
+For Claude Code, without `$CLAUDE_SETTINGS_FILE` it also merges into every
+existing `~/.claude-*/settings.json`: a Claude started with
 `CLAUDE_CONFIG_DIR=~/.claude-<profile>` reads only that profile's
 settings, so it never fired our hooks and silently never showed up in
 the picker. Profiles without a `settings.json` are not created.
 
-The dedup strategy: for each event we manage, strip *any* existing
-entry whose `hooks[0].command` starts with our script's absolute path
-(`is_ours` in the jq filter), regardless of matcher, then re-add the
-current desired entry/entries for that event. This means changing
-which matcher or command we use for an event (like the `idle_prompt`
-fix) migrates existing installs cleanly instead of leaving stale
-duplicates alongside the new one — this bit was gotten wrong once
-before matcher-aware stripping was added; test any future change to
-this logic against a settings file from *before* the change, not just
-a fresh one. The Hermes adapter's Python merge path uses the same
-dedup-by-command-prefix idea, adapted to YAML lists.
+The dedup strategy: strip *every* command that starts with this plugin's
+directory, for *every* event, regardless of matcher, then re-add the current
+table. So changing a matcher, the hook command or dropping an event migrates
+existing installs instead of leaving stale duplicates — this bit was gotten
+wrong once before; test any future change to this logic against a settings
+file from *before* the change, not just a fresh one (`tests/install-json-hooks.sh`
+does). The file is rewritten only if something changed, and the first rewrite
+leaves a `.bak.tmux-agent-status` copy. The Hermes adapter's Python merge path
+uses the same dedup-by-command-prefix idea, adapted to YAML lists; Kimi replaces
+a marked block in `config.toml`.
 
 To test changes to this script without touching your real config:
 

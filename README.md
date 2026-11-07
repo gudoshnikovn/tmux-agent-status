@@ -1,46 +1,73 @@
 # tmux-agent-status
 
-See at a glance which tmux pane running an AI coding agent (Claude
-Code, Hermes, ...) is waiting on you and which one just finished —
-across every session and window — and jump straight to it.
+**Know which AI coding agent is waiting on you in tmux, and jump straight to it.**
+
+A tmux plugin for running several coding agents at once: Claude Code, Codex,
+Gemini CLI, Kimi Code, OpenCode, Hermes. It shows which pane is working, which
+one needs your permission or an answer, and which one just finished, across
+every session and window. You keep your own tmux setup; there's no wrapper,
+daemon or dashboard to live in.
 
 ![demo](assets/demo.gif)
 
-## Supported tools
+```
+→1 ⏳ waiting  5m | api:2.1       [1/2] | web (claude) · permission: Bash
+ 2 ⚙️ working  1s | api:1.1       [2/2] | server (kimi)
+ 3 ✅ done     2m | billing:1.1         | agent (opencode)
+ 4 💤 idle     1h | notes:1.1           | nvim (claude-personal)
+ 5 ○ no hooks   - | scratch:1.1         | zsh (aider)
+```
 
-- [Claude Code](https://github.com/anthropics/claude-code) ([hooks docs](https://code.claude.com/docs/en/hooks))
-- [Hermes](https://github.com/nousresearch/hermes-agent) ([hooks docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks))
+## Why hooks, not screen scraping
 
-Support for a new tool is just a new `adapters/<tool>/` directory —
+Status comes from each agent's own lifecycle hooks, so nothing parses terminal
+output with regexes that break on the next UI update. Hooks are installed for
+you, additively, for every supported agent found on your machine.
+
+## Supported agents
+
+| Agent | Integration | Tested against the real CLI |
+|---|---|---|
+| [Claude Code](https://github.com/anthropics/claude-code), including `CLAUDE_CONFIG_DIR` profiles | [hooks](https://code.claude.com/docs/en/hooks) | yes |
+| [Kimi Code](https://moonshotai.github.io/kimi-code/) | hooks in `config.toml` | yes |
+| [OpenCode](https://github.com/sst/opencode) 2 | TUI plugin | yes, except permission prompts |
+| [Hermes](https://github.com/nousresearch/hermes-agent) | [shell hooks](https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks) | yes |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | [hooks](https://geminicli.com/docs/hooks/reference/) | install only: please report what you see |
+| [Codex CLI](https://github.com/openai/codex) | [hooks](https://developers.openai.com/codex/hooks); trust them once with `/hooks` | install only: please report what you see |
+
+Any other agent still appears in the picker as `○ no hooks`, found by its
+process name. A new agent with Claude-style JSON hooks takes one small table:
 see "Adding a new tool" below.
 
 ## What it does
 
-- **Picker**: `prefix + j` opens a popup listing every active agent
-  pane (working, waiting, or just done) across *all* tmux sessions
-  (via [`fzf`](https://github.com/junegunn/fzf)), sorted
-  needs-your-input-first, jump to any of them in one keystroke.
-  `tab` multi-selects panes and `ctrl-x` dismisses them from the list
-  (clears their status) without leaving the popup — the pane reappears
-  on its own the next time its agent reports activity.
-- **Status-line summary**: a persistent `⏳2 ⚙️1 ✅3`-style counter
-  prepended to `status-right`, so you can see there's something to
-  check without opening the picker.
-- **Notifications**: a transient tmux popup and (on macOS) a
-  notification-center alert when a pane starts waiting on you or
-  finishes, so you notice even if you're looking at a different pane.
-  Optional sound alert too.
-- **Extensible**: support for a new tool is a new `adapters/<tool>/`
-  directory (detection + hook installation) — the core picker/summary
-  logic is tool-agnostic and never needs to change. See "Adding a new
-  tool" below.
+- **Picker**: `prefix + j` opens a popup with every agent pane across *all*
+  tmux sessions (via [`fzf`](https://github.com/junegunn/fzf)), needs-you first,
+  with how long each status has held, why a pane is waiting, and a live preview
+  of the pane. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
+- **Jump to the next one**: `prefix + J` goes to the pane that has waited
+  longest, then panes you haven't looked at yet. Press again to cycle.
+- **Seen tracking**: a finished pane stays `✅ done` until you look at it, then
+  becomes a dimmed `💤 idle` and leaves the counter.
+- **Status-line summary**: a persistent `⏳2 ⚙️1 ✅3` counter prepended to
+  `status-right`, always visible.
+- **Notifications**: a tmux message and (on macOS) a notification-center alert
+  when a pane starts waiting or finishes, skipped for the pane you're looking
+  at. Your terminal losing focus counts as not looking. Optional sound.
+- **Containers and remote hosts**: agents that can't reach the tmux socket can
+  report through a bridge file.
 
 ## Requirements
 
 - [`fzf`](https://github.com/junegunn/fzf) (picker)
 - Per adapter you use:
-  - Claude Code: `jq`, Claude Code CLI
-  - Hermes: `python3` with `pyyaml`, or `yq`, and the Hermes CLI
+  - Claude Code, Gemini CLI, Codex: `jq`
+  - OpenCode: `jq`, OpenCode 2 started at least once (it creates `cli.json`)
+  - Kimi Code: nothing extra
+  - Hermes: `python3` with `pyyaml`, or `yq`
+
+Tested on macOS with its stock bash 3.2 and tmux 3.8. Seen tracking needs
+`set -g focus-events on` to notice your terminal losing focus.
 
 ## Install
 
@@ -91,6 +118,8 @@ Set these *before* the plugin line:
 
 ```tmux
 set -g @agent_status_pick_key 'j'          # prefix + j by default
+set -g @agent_status_next_key 'J'          # prefix + J by default
+set -g @agent_status_agents 'claude aider' # process names listed without hooks
 
 set -g @agent_status_summary 'off'         # disable the status-right counter
 set -g @agent_status_summary_icon_done '#[fg=colour245]✓'  # any text; #[...] styles work here, not in the config file
@@ -106,6 +135,8 @@ set -g @agent_status_notify_sound_file '/System/Library/Sounds/Glass.aiff'
 | Config file key | `.tmux.conf` option | Default | Meaning |
 |---|---|---|---|
 | `pick_key` | `@agent_status_pick_key` | `j` | Key for `prefix + <key>` picker popup |
+| `next_key` | `@agent_status_next_key` | `J` | Key for `prefix + <key>` jump to the next pane needing you |
+| `agents` | `@agent_status_agents` | common agent names | Space-separated process names shown as `○ no hooks` when they haven't reported |
 | `summary` | `@agent_status_summary` | `on` | Status-right `⏳2 ⚙️1 ✅3` counter |
 | `summary_icon_waiting` | `@agent_status_summary_icon_waiting` | `⏳` | Counter prefix for waiting panes |
 | `summary_icon_working` | `@agent_status_summary_icon_working` | `⚙️` | Counter prefix for working panes |
@@ -141,10 +172,9 @@ Every supported tool's hooks call `core/agent-status.sh <status>
 `@agent_status` across all panes/sessions for the popup picker and the
 status-line counter.
 
-For Claude Code specifically, five hooks are wired (`UserPromptSubmit`,
-`PreToolUse`, `PermissionRequest`, `Notification`/`idle_prompt`,
-`Stop`, plus a few more edge cases) — the full reasoning for each is in
-CLAUDE.md, since it was non-obvious and previously got it wrong twice.
+Each adapter's `hooks.map` lists which event sets which status. The full
+reasoning for Claude Code's is in CLAUDE.md, since it was non-obvious and
+previously got it wrong twice.
 
 ## Crash / interrupt recovery
 
@@ -163,19 +193,22 @@ long it's been there.
 
 ## Adding a new tool
 
-Add a directory `adapters/<tool>/` with three files:
+Add a directory `adapters/<tool>/` with:
 
-- `detect.sh` — no args, exit 0 if the tool looks usable on this
-  machine (e.g. a binary on `PATH`), exit 1 otherwise.
-- `install-hooks.sh` — idempotent, additive: registers hooks in that
-  tool's own native config format, each one invoking
-  `core/agent-status.sh <working|waiting|done|clear> --tool <tool>`.
+- `detect.sh` — no args, exit 0 if the tool looks usable on this machine (e.g.
+  a binary on `PATH`), exit 1 otherwise.
+- `install-hooks.sh` — idempotent, additive: registers hooks in that tool's own
+  config, each one invoking `core/agent-status.sh <working|waiting|done|clear>
+  --tool <tool>`, and removes them on `--uninstall`.
 - `process-pattern` — a single-line regex matched against
-  `#{pane_current_command}`, used only by the crash/liveness sweep
-  above.
+  `#{pane_current_command}`, used only by the crash/liveness sweep above.
 
-`tmux/agent-status.tmux` picks up any `adapters/*/` directory
-automatically on every `tmux source-file` — no core changes needed.
+If the tool uses Claude-style JSON hooks, `install-hooks.sh` is a one-line call
+to `core/install-json-hooks.sh` plus a `hooks.map` table (see `adapters/gemini/`).
+
+`tmux/agent-status.tmux` picks up any `adapters/*/` directory automatically on
+every `tmux source-file` — no core changes needed. Run the tests with
+`for t in tests/*.sh; do "$t"; done`.
 
 ## Known limitations
 
@@ -190,10 +223,22 @@ automatically on every `tmux source-file` — no core changes needed.
   workaround is possible until Claude Code adds a hook for that
   transition — tracked at
   [anthropics/claude-code#77700](https://github.com/anthropics/claude-code/issues/77700),
-  see CLAUDE.md for the full writeup.
+  see CLAUDE.md for the full writeup. Kimi Code and OpenCode don't have this
+  gap.
+- **Interrupted turns (Claude Code, Gemini CLI).** Claude Code has no interrupt
+  hook, so an interrupted pane reads `working` for up to ~60s until
+  `idle_prompt`. Gemini CLI documents no interrupt or API-error event, and no
+  equivalent fallback.
 
 ## Uninstall
 
-Remove the `@plugin` line, then remove the hook entries pointing at
-`agent-status.sh` from each tool's own config (`~/.claude/settings.json`
-for Claude Code, `~/.hermes/config.yaml` for Hermes).
+Remove the `@plugin` line, then remove the hooks from each agent's config:
+
+```sh
+cd ~/.tmux/plugins/tmux-agent-status
+for tool in claude-code gemini codex kimi opencode; do adapters/$tool/install-hooks.sh --uninstall; done
+adapters/hermes/uninstall-hooks.sh
+```
+
+The first edit of each config leaves a `<file>.bak.tmux-agent-status` copy next
+to it.
