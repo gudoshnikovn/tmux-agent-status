@@ -136,7 +136,11 @@ pipes a JSON hook payload doesn't see a broken pipe), and writes:
   except that `adapters/claude-code/hook.sh` reads its `subagent ` prefix.
 - `@agent_status_seen` — `1` once a focused client has shown a `done` pane.
   Set by `core/agent-status-seen.sh` from tmux hooks, or at once if the pane
-  is focused when it finishes. Cleared on every real transition. `@agent_status`
+  is focused when it finishes, or by the summary script once an unvisited pane
+  is older than `@agent_status_idle_after` minutes (default a day, so an
+  overnight finish still counts in the morning). That's a wall-clock timeout, but
+  it only touches a display flag, unlike the liveness one rejected below.
+  Cleared on every real transition. `@agent_status`
   stays `done`, so the pane keeps its picker row and the sweep still covers it;
   the picker shows it as `idle` and the counter skips it.
 

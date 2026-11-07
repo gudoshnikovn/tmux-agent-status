@@ -149,7 +149,8 @@ if [ -z "$formatted" ]; then
 fi
 
 # Display only, never parsed: drops trailing blank lines so "follow" lands on the prompt.
-preview="tmux capture-pane -ep -t {2} | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 60"
+preview="tmux capture-pane -ep -t {2} | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
+preview_size="$(tmux show-option -gqv @agent_status_preview_size 2>/dev/null || true)"
 
 number_binds=""
 for n in 1 2 3 4 5 6 7 8 9; do
@@ -159,7 +160,7 @@ done
 # shellcheck disable=SC2086
 choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1 --ansi \
     --prompt="agent panes> " --reverse \
-    --preview="$preview" --preview-window='down:60%:wrap:follow' \
+    --preview="$preview" --preview-window="down:${preview_size:-75%}:follow:border-top" \
     --header='enter: jump | 1-9: jump to row | tab: select | ctrl-x: dismiss selected | ctrl-r: refresh' \
     --color='fg:-1,bg:-1,fg+:16:bold,bg+:117,hl:25,hl+:25:bold,info:25,prompt:25,pointer:196,marker:28,header:25,border:-1,label:-1' \
     $number_binds \

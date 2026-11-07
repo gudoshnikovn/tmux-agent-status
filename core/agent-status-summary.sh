@@ -55,6 +55,21 @@ while IFS=$'\t' read -r pane_id status tool current_command; do
     fi
 done <<< "$sweep_rows"
 
+# --- Old "done" panes go idle ------------------------------------------
+
+# Finished long ago and never visited: you left it on purpose, stop counting
+# it. Only touches a display flag, so unlike a liveness timeout it can't
+# misjudge a pane that is really working.
+idle_after="$(tmux show-option -gqv @agent_status_idle_after 2>/dev/null || true)"
+idle_after="${idle_after:-1440}"
+if [ "$idle_after" -gt 0 ] 2>/dev/null; then
+    tmux list-panes -a -F '#{pane_id} #{@agent_status}:#{@agent_status_seen} #{@agent_status_updated_at}' 2>/dev/null |
+        awk -v cutoff="$(( $(date +%s) - idle_after * 60 ))" '$2 == "done:" && $3 != "" && $3 < cutoff { print $1 }' |
+        while read -r pane_id; do
+            tmux set-option -p -t "$pane_id" @agent_status_seen 1 2>/dev/null || true
+        done
+fi
+
 # --- 2. Persistent summary --------------------------------------------
 
 # One tmux round-trip for all options - this runs on every status refresh.

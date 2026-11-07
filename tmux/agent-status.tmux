@@ -18,6 +18,8 @@ tmux_option() {
 
 pick_key="$(tmux_option "@agent_status_pick_key" "j")"
 next_key="$(tmux_option "@agent_status_next_key" "J")"
+popup_width="$(tmux_option "@agent_status_popup_width" "100%")"
+popup_height="$(tmux_option "@agent_status_popup_height" "100%")"
 
 # If a previous version of this plugin left pane-border-style/
 # pane-active-border-style pointed at our status conditional, restore
@@ -61,7 +63,7 @@ tmux set-option -g status-right "#($PLUGIN_ROOT/core/agent-status-summary.sh)${b
 # sees the string. Verified empirically: a bare
 # `display-popup -E "echo '#{session_name}'"` prints the literal,
 # unexpanded text; nesting it inside run-shell resolves it correctly.
-tmux bind-key "$pick_key" run-shell -b "tmux display-popup -E -w 90% -h 85% -b heavy -S 'fg=blue' '$PLUGIN_ROOT/core/agent-picker.sh #{session_name}:#{window_index}.#{pane_index}'"
+tmux bind-key "$pick_key" run-shell -b "tmux display-popup -E -w $popup_width -h $popup_height -b heavy -S 'fg=blue' '$PLUGIN_ROOT/core/agent-picker.sh #{session_name}:#{window_index}.#{pane_index}'"
 
 tmux bind-key "$next_key" run-shell -b "'$PLUGIN_ROOT/core/agent-picker.sh' --next '#{client_name}' '#{pane_id}'"
 

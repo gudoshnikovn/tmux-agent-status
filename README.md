@@ -48,7 +48,8 @@ see "Adding a new tool" below.
 - **Jump to the next one**: `prefix + J` goes to the pane that has waited
   longest, then panes you haven't looked at yet. Press again to cycle.
 - **Seen tracking**: a finished pane stays `✅ done` until you look at it, then
-  becomes a dimmed `💤 idle` and leaves the counter.
+  becomes a dimmed `💤 idle` and leaves the counter. So does one you left
+  alone for a day (`idle_after`).
 - **Status-line summary**: a persistent `⏳2 ⚙️1 ✅3` counter prepended to
   `status-right`, always visible.
 - **Notifications**: a tmux message and (on macOS) a notification-center alert
@@ -136,6 +137,10 @@ set -g @agent_status_notify_sound_file '/System/Library/Sounds/Glass.aiff'
 |---|---|---|---|
 | `pick_key` | `@agent_status_pick_key` | `j` | Key for `prefix + <key>` picker popup |
 | `next_key` | `@agent_status_next_key` | `J` | Key for `prefix + <key>` jump to the next pane needing you |
+| `popup_width` | `@agent_status_popup_width` | `100%` | Picker popup width |
+| `popup_height` | `@agent_status_popup_height` | `100%` | Picker popup height |
+| `preview_size` | `@agent_status_preview_size` | `75%` | Preview's share of the popup height |
+| `idle_after` | `@agent_status_idle_after` | `1440` | Minutes until an unvisited `done` pane goes `idle`; `0` to never |
 | `agents` | `@agent_status_agents` | common agent names | Space-separated process names shown as `○ no hooks` when they haven't reported |
 | `summary` | `@agent_status_summary` | `on` | Status-right `⏳2 ⚙️1 ✅3` counter |
 | `summary_icon_waiting` | `@agent_status_summary_icon_waiting` | `⏳` | Counter prefix for waiting panes |

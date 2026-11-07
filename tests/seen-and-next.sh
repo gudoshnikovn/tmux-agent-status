@@ -55,6 +55,18 @@ agent_status_apply_to_tmux "$c" "" "" ""
 "$ROOT/core/agent-picker.sh" --next "" "$c"; nap 0.2
 [ "$(active)" = "$c" ] || fail "nothing to jump to, should stay put"
 
+agent_status_apply_to_tmux "$b" working "" ""
+agent_status_apply_to_tmux "$b" done "" ""
+tmux set-option -p -t "$b" @agent_status_updated_at "$(( $(date +%s) - 1441 * 60 ))"
+[ "$("$ROOT/core/agent-status-summary.sh")" = "" ] || fail "a day-old done should drop out of the counter"
+[ "$(opt "$b" @agent_status_seen)" = 1 ] || fail "a day-old done should be idle"
+agent_status_apply_to_tmux "$b" working "" ""
+agent_status_apply_to_tmux "$b" done "" ""
+[ "$("$ROOT/core/agent-status-summary.sh")" = "✅1 " ] || fail "a fresh done should count"
+tmux set-option -p -t "$b" @agent_status_updated_at 5
+tmux set-option -g @agent_status_idle_after 0
+[ "$("$ROOT/core/agent-status-summary.sh")" = "✅1 " ] || fail "idle_after 0 should disable going idle"
+
 "$ROOT/tmux/agent-status.tmux"
 [ "$(tmux show-hooks -g client-focus-in | wc -l | tr -d ' ')" = 1 ] || fail "reload stacked a hook"
 
