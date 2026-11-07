@@ -29,6 +29,8 @@ adapters/
     process-pattern
 tmux/
   agent-status.tmux        # real entry point: status-right wiring, keybind, adapter loop
+tests/
+  picker-alignment.sh      # picker columns stay aligned (fake tmux, no server needed)
 agent_status.tmux          # root-level shim - see below
 ```
 

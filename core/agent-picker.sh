@@ -31,6 +31,15 @@ list_panes() {
     printf '%s\n' "$sorted" | awk -F'\t' -v cur="$current_session" '
     { line[NR] = $0; s = $3; sub(/:.*/, "", s); sess[NR] = s; total[s]++ }
     END {
+        # shortcut: awk may count bytes, so non-ASCII session names can still drift; upgrade if those show up.
+        for (n = 1; n <= NR; n++) {
+            split(line[n], f, "\t");
+            s = sess[n];
+            badge[n] = (total[s] > 1) ? sprintf("[%d/%d]", ++seen[s], total[s]) : "";
+            if (length(f[3]) > target_w) target_w = length(f[3]);
+            if (length(badge[n]) > badge_w) badge_w = length(badge[n]);
+        }
+        fmt = "%s%s %s | %-" target_w "s %-" badge_w "s | %s (%s)\t%s\n";
         for (n = 1; n <= NR; n++) {
             split(line[n], f, "\t");
             if (f[1] == "waiting")      icon = "⏳ waiting";
@@ -39,8 +48,7 @@ list_panes() {
             num = (n <= 9) ? n : " ";
             s = sess[n];
             marker = (s == cur) ? "\033[1;32m→\033[0m" : " ";
-            badge = (total[s] > 1) ? sprintf("[%d/%d]", ++seen[s], total[s]) : "";
-            printf "%s%s %s | %-25s %-5s | %s (%s)\t%s\n", marker, num, icon, f[3], badge, f[4], f[5], f[3];
+            printf fmt, marker, num, icon, f[3], badge[n], f[4], f[5], f[3];
         }
     }'
 }
