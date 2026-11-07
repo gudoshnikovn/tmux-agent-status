@@ -487,9 +487,15 @@ the EXIT trap.
 `VIEWS` in `agent-picker.sh` lists them; `ctrl-s` cycles while the picker is open
 (state in a temp file, so reopening returns to `@agent_status_view`). To add one: put its
 name in `VIEWS`, write `render_<name>`, and add any reordering to `order_view`. fzf has no
-unselectable rows, so `session` view's headings are rows with target `=<first pane>`:
-Enter jumps there, ctrl-x skips them, and they count in the 1-9 numbering because `pos()`
-does. Pane rows repeat the session name, dimmed, because fzf can only search displayed text.
+unselectable rows, so a `session` heading is the first line of its session's first pane
+item (`--read0`, RS in `--list` output becomes the item's inner newline). The cursor and
+1-9 therefore only ever see panes, and `pos()` lines up with the numbers. Don't make
+headings separate rows: they'd take cursor stops and numbers. Pane rows repeat the session
+name, dimmed, because fzf can only search displayed text.
+
+Icons live in `agent_status_load_icons` (`@agent_status_icons`, `minimal` by default). Keep
+a theme's icons one width, or picker columns drift. The counter deliberately shows only
+waiting/working/done; idle and unknown exist only in the picker.
 
 ## The other presets
 
@@ -563,7 +569,7 @@ Three more things layered on top of the transient `tmux display-message`:
 - **Persistent status-line summary** (`core/agent-status-summary.sh`,
   prepended to `status-right` by `agent-status.tmux`, gated by
   `@agent_status_summary`, default on): counts panes in each state
-  across all sessions (`⏳2 ⚙️1 ✅3`), always visible instead of a
+  across all sessions (`!2 …1 ✓3`), always visible instead of a
   transient popup. Uses a **baseline-capture-once trick** via
   `@agent_status_base_status_right`: captured once, read only if unset,
   so re-sourcing `.tmux.conf` doesn't re-capture our own

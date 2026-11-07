@@ -11,11 +11,11 @@ daemon or dashboard to live in.
 ![demo](assets/demo.gif)
 
 ```
-→1 ⏳ waiting  5m | api:2.1       [1/2] | web (claude) · permission: Bash
- 2 ⚙️ working  1s | api:1.1       [2/2] | server (kimi)
- 3 ✅ done     2m | billing:1.1         | agent (opencode)
- 4 💤 idle     1h | notes:1.1           | nvim (claude-personal)
- 5 ○ unknown   - | scratch:1.1         | zsh (aider)
+→1 ! waiting  5m | api:2.1       [1/2] | web (claude) · permission: Bash
+ 2 … working  1s | api:1.1       [2/2] | server (kimi)
+ 3 ✓ done     2m | billing:1.1         | agent (opencode)
+ 4 · idle     1h | notes:1.1           | nvim (claude-personal)
+ 5 ? unknown   - | scratch:1.1         | zsh (aider)
 ```
 
 ## Why hooks, not screen scraping
@@ -35,7 +35,7 @@ you, additively, for every supported agent found on your machine.
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | [hooks](https://geminicli.com/docs/hooks/reference/) | install only: please report what you see |
 | [Codex CLI](https://github.com/openai/codex) | [hooks](https://developers.openai.com/codex/hooks); trust them once with `/hooks` | install only: please report what you see |
 
-Any other agent still appears in the picker as `○ unknown`, found by its
+Any other agent still appears in the picker as `? unknown`, found by its
 process name. A new agent with Claude-style JSON hooks takes one small table:
 see "Adding a new tool" below.
 
@@ -50,10 +50,10 @@ see "Adding a new tool" below.
   Set the default with `view`.
 - **Jump to the next one**: `prefix + J` goes to the pane that has waited
   longest, then panes you haven't looked at yet. Press again to cycle.
-- **Seen tracking**: a finished pane stays `✅ done` until you look at it, then
-  becomes a dimmed `💤 idle` and leaves the counter. So does one you left
+- **Seen tracking**: a finished pane stays `✓ done` until you look at it, then
+  becomes a dimmed `· idle` and leaves the counter. So does one you left
   alone for a day (`idle_after`).
-- **Status-line summary**: a persistent `⏳2 ⚙️1 ✅3` counter prepended to
+- **Status-line summary**: a persistent `!2 …1 ✓3` counter prepended to
   `status-right`, always visible.
 - **Notifications**: a tmux message and (on macOS) a notification-center alert
   when a pane starts waiting or finishes, skipped for the pane you're looking
@@ -142,16 +142,17 @@ set -g @agent_status_notify_sound_file '/System/Library/Sounds/Glass.aiff'
 |---|---|---|---|
 | `pick_key` | `@agent_status_pick_key` | `j` | Key for `prefix + <key>` picker popup |
 | `next_key` | `@agent_status_next_key` | `J` | Key for `prefix + <key>` jump to the next pane needing you |
+| `icons` | `@agent_status_icons` | `minimal` | Icon set for the picker, counter and messages: `minimal` or `emoji` |
 | `view` | `@agent_status_view` | `status` | Picker view on open: `status` or `session` |
 | `popup_width` | `@agent_status_popup_width` | `100%` | Picker popup width |
 | `popup_height` | `@agent_status_popup_height` | `100%` | Picker popup height |
 | `preview_size` | `@agent_status_preview_size` | `75%` | Preview's share of the popup height |
 | `idle_after` | `@agent_status_idle_after` | `1440` | Minutes until an unvisited `done` pane goes `idle`; `0` to never |
-| `agents` | `@agent_status_agents` | common agent names | Space-separated process names shown as `○ unknown` when they haven't reported |
-| `summary` | `@agent_status_summary` | `on` | Status-right `⏳2 ⚙️1 ✅3` counter |
-| `summary_icon_waiting` | `@agent_status_summary_icon_waiting` | `⏳` | Counter prefix for waiting panes |
-| `summary_icon_working` | `@agent_status_summary_icon_working` | `⚙️` | Counter prefix for working panes |
-| `summary_icon_done` | `@agent_status_summary_icon_done` | `✅` | Counter prefix for done panes |
+| `agents` | `@agent_status_agents` | common agent names | Space-separated process names shown as `? unknown` when they haven't reported |
+| `summary` | `@agent_status_summary` | `on` | Status-right `!2 …1 ✓3` counter |
+| `summary_icon_waiting` | `@agent_status_summary_icon_waiting` | from `icons` | Counter prefix for waiting panes |
+| `summary_icon_working` | `@agent_status_summary_icon_working` | from `icons` | Counter prefix for working panes |
+| `summary_icon_done` | `@agent_status_summary_icon_done` | from `icons` | Counter prefix for done panes |
 | `notify` | `@agent_status_notify` | `on` | Transient tmux popup on waiting/done |
 | `notify_duration` | `@agent_status_notify_duration` | `3000` | ms the tmux popup stays up |
 | `notify_system` | `@agent_status_notify_system` | `on` if `osascript` exists | macOS notification-center alert |

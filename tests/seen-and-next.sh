@@ -30,7 +30,7 @@ agent_status_apply_to_tmux "$a" done "" ""
 agent_status_apply_to_tmux "$b" done "" ""
 [ -z "$(opt "$b" @agent_status_seen)" ] || fail "done in a background pane must stay unseen"
 counter="$("$ROOT/core/agent-status-summary.sh")"
-[ "$counter" = "✅1 " ] || fail "counter should skip seen panes, got [$counter]"
+[ "$counter" = "✓1 " ] || fail "counter should skip seen panes, got [$counter]"
 
 agent_status_apply_to_tmux "$c" waiting "" "" "permission: Bash"
 [ "$(opt "$c" @agent_status_message)" = "permission: Bash" ] || fail "message not stored"
@@ -62,12 +62,17 @@ tmux set-option -p -t "$b" @agent_status_updated_at "$(( $(date +%s) - 1441 * 60
 [ "$(opt "$b" @agent_status_seen)" = 1 ] || fail "a day-old done should be idle"
 agent_status_apply_to_tmux "$b" working "" ""
 agent_status_apply_to_tmux "$b" done "" ""
-[ "$("$ROOT/core/agent-status-summary.sh")" = "✅1 " ] || fail "a fresh done should count"
+[ "$("$ROOT/core/agent-status-summary.sh")" = "✓1 " ] || fail "a fresh done should count"
 tmux set-option -p -t "$b" @agent_status_updated_at 5
 tmux set-option -g @agent_status_idle_after 0
-[ "$("$ROOT/core/agent-status-summary.sh")" = "✅1 " ] || fail "idle_after 0 should disable going idle"
+[ "$("$ROOT/core/agent-status-summary.sh")" = "✓1 " ] || fail "idle_after 0 should disable going idle"
 
 "$ROOT/tmux/agent-status.tmux"
 [ "$(tmux show-hooks -g client-focus-in | wc -l | tr -d ' ')" = 1 ] || fail "reload stacked a hook"
+
+tmux set-option -g @agent_status_icons emoji
+[ "$("$ROOT/core/agent-status-summary.sh")" = "✅1 " ] || fail "emoji theme not applied to the counter"
+tmux set-option -g @agent_status_summary_icon_done "D"
+[ "$("$ROOT/core/agent-status-summary.sh")" = "D1 " ] || fail "a counter icon option should still win"
 
 echo "ok: seen tracking and next key"

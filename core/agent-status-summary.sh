@@ -14,7 +14,7 @@
 #    - it's a correctness fix, not a UI feature.
 #
 # 2. Persistent status-line summary: counts of panes across all
-#    sessions in each state, e.g. "⏳2 ⚙️1 ✅3". Finished panes you have
+#    sessions in each state, e.g. "!2 …1 ✓3". Finished panes you have
 #    already looked at don't count. Empty output when nothing's active,
 #    so it doesn't leave a stray gap in status-right.
 #
@@ -88,8 +88,9 @@ working="$(printf '%s\n' "$rows" | grep -c '^working:' || true)"
 done_count="$(printf '%s\n' "$rows" | grep -c '^done:$' || true)"
 
 out=""
-[ "$waiting" -gt 0 ] && out="${out}${icon_waiting:-⏳}${waiting} "
-[ "$working" -gt 0 ] && out="${out}${icon_working:-⚙️}${working} "
-[ "$done_count" -gt 0 ] && out="${out}${icon_done:-✅}${done_count} "
+agent_status_load_icons
+[ "$waiting" -gt 0 ] && out="${out}${icon_waiting:-$ICON_WAITING}${waiting} "
+[ "$working" -gt 0 ] && out="${out}${icon_working:-$ICON_WORKING}${working} "
+[ "$done_count" -gt 0 ] && out="${out}${icon_done:-$ICON_DONE}${done_count} "
 
 printf '%s' "$out"

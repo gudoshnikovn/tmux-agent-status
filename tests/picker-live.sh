@@ -110,28 +110,42 @@ screen | grep -q 'agent panes>' && fail "ctrl-q was swallowed during a reload"
 rm -f "$TMP/bin/ps"
 
 # ctrl-s switches views in the open picker; closing it goes back to the default.
+heading='→ main '
 press C-b j
 appears 'agent panes>' || fail "popup did not reopen"
-screen | grep -q '[0-9] main ' && fail "session headings before switching"
+screen | grep -q "$heading" && fail "session headings before switching"
 press C-s
-appears '[0-9] main ' || fail "ctrl-s did not switch to the session view"
+appears "$heading" || fail "ctrl-s did not switch to the session view"
 press C-s
-for _ in 1 2 3 4 5 6 7 8 9 10; do screen | grep -q '[0-9] main ' || break; nap 0.2; done
-screen | grep -q '[0-9] main ' && fail "ctrl-s did not switch back"
+for _ in 1 2 3 4 5 6 7 8 9 10; do screen | grep -q "$heading" || break; nap 0.2; done
+screen | grep -q "$heading" && fail "ctrl-s did not switch back"
 press C-s
-appears '[0-9] main ' || fail "ctrl-s did not switch again"
+appears "$heading" || fail "ctrl-s did not switch again"
 press Escape
 press C-b j
 appears 'agent panes>' || fail "popup did not reopen"
-screen | grep -q '[0-9] main ' && fail "closing the picker should reset the view"
+screen | grep -q "$heading" && fail "closing the picker should reset the view"
 press Escape
 
+# Grouped: the cursor and 1-9 reach panes only, whichever pane is first or second.
 tmux set-option -g @agent_status_view session
 press C-b j
-appears '[0-9] main ' || fail "@agent_status_view did not set the default"
+appears "$heading" || fail "@agent_status_view did not set the default"
 press Enter
 nap 0.5
-screen | grep -q 'agent panes>' && fail "enter on a heading should jump"
+first_pane="$(tmux display-message -p '#{pane_id}')"
+press C-b j
+appears "$heading" || fail "popup did not reopen"
+press C-j
+press Enter
+nap 0.5
+second_pane="$(tmux display-message -p '#{pane_id}')"
+[ "$first_pane" != "$second_pane" ] || fail "one ctrl-j should land on the next pane, not a heading"
+press C-b j
+appears "$heading" || fail "popup did not reopen"
+press 2
+nap 0.5
+[ "$(tmux display-message -p '#{pane_id}')" = "$second_pane" ] || fail "2 should go to the second pane"
 tmux set-option -gu @agent_status_view
 
 # An fzf without these flags must still get a working, static picker.

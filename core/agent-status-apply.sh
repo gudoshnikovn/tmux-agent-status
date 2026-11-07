@@ -10,10 +10,23 @@
 #     directly (see README's "Agent running in a container/VM/remote
 #     host" section).
 #
-# Defines agent_status_pane_focused <pane_id> and
+# Defines agent_status_load_icons, agent_status_pane_focused <pane_id> and
 # agent_status_apply_to_tmux <pane_id> <status> <tool> [label] [message]
 # and nothing else - no top-level code, no `set -e` (the sourcing script
 # owns its own shell options).
+
+# Sets ICON_WAITING/WORKING/DONE/IDLE/UNKNOWN from @agent_status_icons. Both themes
+# keep every icon the same width, so picker columns line up within a theme.
+agent_status_load_icons() {
+    case "$(tmux show-option -gqv @agent_status_icons 2>/dev/null || true)" in
+        emoji)
+            ICON_WAITING="⏳" ICON_WORKING="⚙️" ICON_DONE="✅" ICON_IDLE="💤" ICON_UNKNOWN="❔"
+            ;;
+        *)
+            ICON_WAITING="!" ICON_WORKING="…" ICON_DONE="✓" ICON_IDLE="·" ICON_UNKNOWN="?"
+            ;;
+    esac
+}
 
 # True when a client whose terminal has OS focus is showing this pane.
 agent_status_pane_focused() {
@@ -97,9 +110,10 @@ agent_status_apply_to_tmux() {
 
         location="$(tmux display-message -p -t "$pane" '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || true)"
 
+        agent_status_load_icons
         case "$status" in
-            waiting) icon="⏳ waiting" ;;
-            done)    icon="✅ done" ;;
+            waiting) icon="$ICON_WAITING waiting" ;;
+            done)    icon="$ICON_DONE done" ;;
         esac
 
         tmux display-message -d "$duration" -t "$pane" "$icon: $location" 2>/dev/null || true

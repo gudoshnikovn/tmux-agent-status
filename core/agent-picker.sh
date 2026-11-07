@@ -9,6 +9,8 @@
 set -euo pipefail
 
 CURRENT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=./agent-status-apply.sh
+source "$CURRENT_DIR/agent-status-apply.sh"
 
 # Foreground processes on any tty that look like a known agent, as "tty<TAB>name".
 # Runtimes count by their script: "node /path/to/gemini" is gemini.
@@ -51,6 +53,12 @@ order_view() {
     esac
 }
 
+render_awk() {
+    agent_status_load_icons
+    awk -F'\t' -v cur="$1" -v now="$(date +%s)" -v i_waiting="$ICON_WAITING" -v i_working="$ICON_WORKING" \
+        -v i_done="$ICON_DONE" -v i_idle="$ICON_IDLE" -v i_unknown="$ICON_UNKNOWN" "$RENDER_COMMON$2"
+}
+
 RENDER_COMMON='
 function age(updated, d) {
     if (updated == "") return "-";
@@ -62,11 +70,11 @@ function age(updated, d) {
 }
 function set_status_cell(status, seen) {
     dim = "";
-    if (status == "waiting")      icon = "⏳ waiting";
-    else if (status == "working") icon = "⚙️ working";
-    else if (status == "unknown") { icon = "○ unknown "; dim = "\033[2m"; }
-    else if (seen != "")          { icon = "💤 idle   "; dim = "\033[2m"; }
-    else                          icon = "✅ done   ";
+    if (status == "waiting")      cell = sprintf("%s %-7s", i_waiting, "waiting");
+    else if (status == "working") cell = sprintf("%s %-7s", i_working, "working");
+    else if (status == "unknown") { cell = sprintf("%s %-7s", i_unknown, "unknown"); dim = "\033[2m"; }
+    else if (seen != "")          { cell = sprintf("%s %-7s", i_idle, "idle"); dim = "\033[2m"; }
+    else                          cell = sprintf("%s %-7s", i_done, "done");
 }
 '
 
@@ -74,7 +82,7 @@ function set_status_cell(status, seen) {
 # "→" marker (ANSI, relies on --ansi in the fzf invocation below). Several agent
 # panes in one session get a "[i/N]" badge so it's obvious they're siblings.
 render_status() {
-    awk -F'\t' -v cur="$1" -v now="$(date +%s)" "$RENDER_COMMON"'
+    render_awk "$1" '
     { line[NR] = $0; s = $3; sub(/:.*/, "", s); sess[NR] = s; total[s]++ }
     END {
         # shortcut: awk may count bytes, so non-ASCII session names can still drift; upgrade if those show up.
@@ -92,49 +100,46 @@ render_status() {
             num = (n <= 9) ? n : " ";
             marker = (sess[n] == cur) ? "\033[1;32m→\033[0m" : " ";
             why = (f[7] != "") ? " · " f[7] : "";
-            printf fmt, marker, dim, num, icon, age(f[2]), f[3], badge[n], f[4], f[5], why, (dim != "") ? "\033[0m" : "", f[3];
+            printf fmt, marker, dim, num, cell, age(f[2]), f[3], badge[n], f[4], f[5], why, (dim != "") ? "\033[0m" : "", f[3];
         }
     }'
 }
 
 # A heading per session, then its panes. fzf has no unselectable rows, so a heading
-# is a row too: its target is "=<first pane>", meaning jump there but never dismiss.
-# Pane rows repeat the session name, dimmed, so searching by session still finds them.
+# is the first line of its session's first pane (RS, \036, becomes the newline inside
+# a --read0 item): the cursor and 1-9 only ever see panes. Pane rows repeat the
+# session name, dimmed, so searching by session still finds them.
 render_session() {
-    awk -F'\t' -v cur="$1" -v now="$(date +%s)" "$RENDER_COMMON"'
+    render_awk "$1" '
     {
         line[NR] = $0; s = $3; sub(/:.*/, "", s); sess[NR] = s;
         p = $3; sub(/^[^:]*:/, "", p); pane[NR] = p;
         if (length(p) > pane_w) pane_w = length(p);
-        if (!(s in first)) first[s] = $3;
         if ($1 == "done" && $6 != "") key = "idle"; else key = $1;
         count[s, key]++;
     }
     function rollup(s, out) {
         out = "";
-        if (count[s, "waiting"]) out = out " ⏳" count[s, "waiting"];
-        if (count[s, "working"]) out = out " ⚙️" count[s, "working"];
-        if (count[s, "done"]) out = out " ✅" count[s, "done"];
-        if (count[s, "idle"]) out = out " 💤" count[s, "idle"];
-        if (count[s, "unknown"]) out = out " ○" count[s, "unknown"];
+        if (count[s, "waiting"]) out = out " " i_waiting count[s, "waiting"];
+        if (count[s, "working"]) out = out " " i_working count[s, "working"];
+        if (count[s, "done"]) out = out " " i_done count[s, "done"];
+        if (count[s, "idle"]) out = out " " i_idle count[s, "idle"];
+        if (count[s, "unknown"]) out = out " " i_unknown count[s, "unknown"];
         return out;
     }
     END {
-        fmt = " %s  %s %3s | %-" pane_w "s | %s (%s)%s \033[2m%s\033[0m%s\t%s\n";
-        row = 0;
+        fmt = " %s%s %s %3s | %-" pane_w "s | %s (%s)%s \033[2m%s\033[0m%s\t%s\n";
         for (n = 1; n <= NR; n++) {
             split(line[n], f, "\t");
             s = sess[n];
             if (s != prev) {
-                row++;
                 marker = (s == cur) ? "\033[1;32m→\033[0m" : " ";
-                printf "%s%s \033[1m%s\033[0m%s\t=%s\n", marker, (row <= 9) ? row : " ", s, rollup(s), first[s];
+                printf "%s \033[1m%s\033[0m%s\036", marker, s, rollup(s);
                 prev = s;
             }
-            row++;
             set_status_cell(f[1], f[6]);
             why = (f[7] != "") ? " · " f[7] : "";
-            printf fmt, (row <= 9) ? row : " ", dim icon, age(f[2]), pane[n], f[4], f[5], why, s, (dim != "") ? "\033[0m" : "", f[3];
+            printf fmt, dim, (n <= 9) ? n : " ", cell, age(f[2]), pane[n], f[4], f[5], why, s, (dim != "") ? "\033[0m" : "", f[3];
         }
     }'
 }
@@ -220,10 +225,7 @@ fi
 
 if [ "${1:-}" = "--dismiss" ]; then
     shift
-    # shellcheck source=./agent-status-apply.sh
-    source "$CURRENT_DIR/agent-status-apply.sh"
     for target in "$@"; do
-        case "$target" in =*) continue ;; esac # a session heading, not a pane
         agent_status_apply_to_tmux "$target" "" "" >/dev/null 2>&1 || true
     done
     exit 0
@@ -251,12 +253,14 @@ order_file="$live_dir/order"
 printf '%s\n' "$formatted" | cut -f2 > "$order_file"
 view_file="$live_dir/view"
 configured_view > "$view_file"
-list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_session' '$order_file' '$view_file'"
+# fzf reads NUL-separated items, so a session heading can share its pane's item.
+to_items="tr '\\n\\036' '\\000\\n'"
+list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_session' '$order_file' '$view_file' | $to_items"
 formatted="$(list_panes "$current_session" "$order_file" "$(cat "$view_file")")"
 
 # Display only, never parsed: drops trailing blank lines so "follow" lands on the
 # prompt. Noting the target tells the refresher below which pane is on show.
-preview="target={2}; target=\"\${target#=}\"; printf %s \"\$target\" > '$live_dir/focus'; tmux capture-pane -ep -t \"\$target\" | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
+preview="printf %s {2} > '$live_dir/focus'; tmux capture-pane -ep -t {2} | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
 preview_size="$(tmux show-option -gqv @agent_status_preview_size 2>/dev/null || true)"
 
 number_binds=""
@@ -297,7 +301,7 @@ if command -v curl >/dev/null 2>&1 && [ "$fzf_status" -ne 2 ]; then
 fi
 
 # shellcheck disable=SC2086
-choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1 --ansi \
+choice="$(printf '%s\n' "$formatted" | eval "$to_items" | fzf --read0 --multi --delimiter='\t' --with-nth=1 --ansi \
     --prompt="agent panes> " --reverse \
     --preview="$preview" --preview-window="down:${preview_size:-75%}:follow:border-top" \
     --header=$'enter: jump | 1-9: jump to row | ctrl-j/k, ↓/↑: move | esc/ctrl-q: exit\ntab: select | ctrl-x: dismiss selected | ctrl-r: refresh | ctrl-s: switch view' \
@@ -309,5 +313,5 @@ choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1
 
 [ -z "$choice" ] && exit 0
 
-target="$(printf '%s' "$choice" | awk -F'\t' '{print $2}')"
-jump_to "${target#=}"
+target="$(printf '%s' "$choice" | awk -F'\t' 'NF > 1 { print $2 }')"
+jump_to "$target"
