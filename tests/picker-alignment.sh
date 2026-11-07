@@ -9,6 +9,7 @@ trap 'rm -rf "$FAKE_BIN"' EXIT
 
 cat > "$FAKE_BIN/tmux" <<'EOF'
 #!/bin/sh
+[ "$1" = list-panes ] || exit 0
 printf 'done\t1\tsystem-configuration-16:1.1\tnvim\tclaude\n'
 printf 'done\t2\tAgents:1.1\tAgents\tclaude\n'
 printf 'waiting\t3\tshort:1.1\tw\tclaude\n'

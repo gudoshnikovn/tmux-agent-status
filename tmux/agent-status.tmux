@@ -17,6 +17,7 @@ tmux_option() {
 }
 
 pick_key="$(tmux_option "@agent_status_pick_key" "j")"
+next_key="$(tmux_option "@agent_status_next_key" "J")"
 
 # If a previous version of this plugin left pane-border-style/
 # pane-active-border-style pointed at our status conditional, restore
@@ -60,7 +61,18 @@ tmux set-option -g status-right "#($PLUGIN_ROOT/core/agent-status-summary.sh)${b
 # sees the string. Verified empirically: a bare
 # `display-popup -E "echo '#{session_name}'"` prints the literal,
 # unexpanded text; nesting it inside run-shell resolves it correctly.
-tmux bind-key "$pick_key" run-shell -b "tmux display-popup -E -w 100 -h 20 -b heavy -S 'fg=blue' '$PLUGIN_ROOT/core/agent-picker.sh #{session_name}:#{window_index}.#{pane_index}'"
+tmux bind-key "$pick_key" run-shell -b "tmux display-popup -E -w 90% -h 85% -b heavy -S 'fg=blue' '$PLUGIN_ROOT/core/agent-picker.sh #{session_name}:#{window_index}.#{pane_index}'"
+
+tmux bind-key "$next_key" run-shell -b "'$PLUGIN_ROOT/core/agent-picker.sh' --next '#{client_name}' '#{pane_id}'"
+
+# A fixed array index, so a reload replaces our hook instead of stacking it.
+seen_cmd="run-shell -b '$PLUGIN_ROOT/core/agent-status-seen.sh'"
+for hook in client-session-changed client-focus-in session-window-changed; do
+    tmux set-hook -g "${hook}[73]" "$seen_cmd"
+done
+for hook in pane-focus-in window-pane-changed; do
+    tmux set-hook -gw "${hook}[73]" "$seen_cmd"
+done
 
 # Each adapters/<tool>/ directory owns its own detection and hook
 # installation - the core here never needs to know which tools exist.

@@ -14,8 +14,9 @@
 #    - it's a correctness fix, not a UI feature.
 #
 # 2. Persistent status-line summary: counts of panes across all
-#    sessions in each state, e.g. "⏳2 ⚙️1 ✅3". Empty output when
-#    nothing's active, so it doesn't leave a stray gap in status-right.
+#    sessions in each state, e.g. "⏳2 ⚙️1 ✅3". Finished panes you have
+#    already looked at don't count. Empty output when nothing's active,
+#    so it doesn't leave a stray gap in status-right.
 #
 # Invoked as a `#()` command substitution from status-right - tmux
 # recalculates those on its own status-interval, and also immediately
@@ -65,11 +66,11 @@ IFS="$sep" read -r summary_enabled icon_waiting icon_working icon_done < <(
 ) || true
 [ "$summary_enabled" = "off" ] && exit 0
 
-rows="$(tmux list-panes -a -F '#{@agent_status}' 2>/dev/null || true)"
+rows="$(tmux list-panes -a -F '#{@agent_status}:#{@agent_status_seen}' 2>/dev/null || true)"
 
-waiting="$(printf '%s\n' "$rows" | grep -c '^waiting$' || true)"
-working="$(printf '%s\n' "$rows" | grep -c '^working$' || true)"
-done_count="$(printf '%s\n' "$rows" | grep -c '^done$' || true)"
+waiting="$(printf '%s\n' "$rows" | grep -c '^waiting:' || true)"
+working="$(printf '%s\n' "$rows" | grep -c '^working:' || true)"
+done_count="$(printf '%s\n' "$rows" | grep -c '^done:$' || true)"
 
 out=""
 [ "$waiting" -gt 0 ] && out="${out}${icon_waiting:-⏳}${waiting} "
