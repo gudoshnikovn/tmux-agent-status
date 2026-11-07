@@ -43,8 +43,8 @@ see "Adding a new tool" below.
 
 - **Picker**: `prefix + j` opens a popup with every agent pane across *all*
   tmux sessions (via [`fzf`](https://github.com/junegunn/fzf)), needs-you first,
-  with how long each status has held, why a pane is waiting, and a live preview
-  of the pane. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
+  with how long each status has held, why a pane is waiting, and a preview of
+  the pane. Rows and preview refresh every second while it's open. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
 - **Jump to the next one**: `prefix + J` goes to the pane that has waited
   longest, then panes you haven't looked at yet. Press again to cycle.
 - **Seen tracking**: a finished pane stays `✅ done` until you look at it, then
@@ -60,7 +60,9 @@ see "Adding a new tool" below.
 
 ## Requirements
 
-- [`fzf`](https://github.com/junegunn/fzf) (picker)
+- [`fzf`](https://github.com/junegunn/fzf) (picker). Live refresh also needs
+  `curl` and an fzf with `--id-nth` and socket `--listen` (tested on 0.74);
+  otherwise the picker stays static until `ctrl-r`.
 - Per adapter you use:
   - Claude Code, Gemini CLI, Codex: `jq`
   - OpenCode: `jq`, OpenCode 2 started at least once (it creates `cli.json`)

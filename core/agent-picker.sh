@@ -157,13 +157,36 @@ for n in 1 2 3 4 5 6 7 8 9; do
     number_binds="$number_binds --bind $n:pos($n)+accept"
 done
 
+# Keep the preview and rows live by poking fzf once a second. A unix socket in a
+# private dir, because anyone reaching fzf's listener can make it run commands.
+# Older fzf lacks these flags, so ask it first and fall back to a static picker.
+live_dir="$(mktemp -d)"
+live_sock="$live_dir/fzf.sock"
+live_args=()
+refresher=""
+trap 'rm -rf "$live_dir"; [ -z "$refresher" ] || kill "$refresher" 2>/dev/null || true' EXIT
+fzf_status=0
+fzf --listen="$live_sock" --id-nth=2 --filter=x </dev/null >/dev/null 2>&1 || fzf_status=$?
+if command -v curl >/dev/null 2>&1 && [ "$fzf_status" -ne 2 ]; then
+    live_args=(--listen="$live_sock" --id-nth=2 --track)
+    (
+        # Popup teardown can skip the EXIT trap, so also stop when the picker is gone.
+        while kill -0 "$$" 2>/dev/null; do
+            sleep 1
+            curl -s --unix-socket "$live_sock" -X POST http://localhost \
+                -d "reload-sync($CURRENT_DIR/agent-picker.sh --list '$current_session')+refresh-preview" >/dev/null 2>&1 || true
+        done
+    ) </dev/null >/dev/null 2>&1 &
+    refresher=$!
+fi
+
 # shellcheck disable=SC2086
 choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1 --ansi \
     --prompt="agent panes> " --reverse \
     --preview="$preview" --preview-window="down:${preview_size:-75%}:follow:border-top" \
     --header=$'enter: jump | 1-9: jump to row | ctrl-j/k, ↓/↑: move | esc/ctrl-q: exit\ntab: select | ctrl-x: dismiss selected | ctrl-r: refresh' \
     --color='fg:-1,bg:-1,fg+:16:bold,bg+:117,hl:25,hl+:25:bold,info:25,prompt:25,pointer:196,marker:28,header:25,border:-1,label:-1' \
-    $number_binds \
+    $number_binds ${live_args[@]+"${live_args[@]}"} \
     --bind "ctrl-r:reload($CURRENT_DIR/agent-picker.sh --list '$current_session')" \
     --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($CURRENT_DIR/agent-picker.sh --list '$current_session')")" || exit 0 # Esc/ctrl-c (130) or no match (1) is a cancel, not an error
 

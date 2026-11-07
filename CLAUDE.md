@@ -459,6 +459,16 @@ present, and otherwise prints the YAML block to add manually rather
 than failing the tmux reload — same graceful-degradation shape as the
 Claude Code adapter's `jq`-missing path.
 
+## Live picker
+
+While the popup is open, a background loop POSTs `reload-sync(...)+refresh-preview`
+to fzf once a second. The listener is a unix socket in a `mktemp -d` dir, not
+fzf's TCP port: anything reaching it can run commands through `execute`. `--id-nth=2
+--track` keep the cursor and selection on the same pane when rows reorder. The flags
+are probed with `--filter` rather than by version number, so an older fzf
+gets the static picker instead of failing silently. The loop also checks `kill -0 $$`
+because popup teardown can skip the EXIT trap.
+
 ## The other presets
 
 **Kimi Code** (`hooks.map` derived from herdr's integration, then verified live
