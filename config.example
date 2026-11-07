@@ -17,6 +17,10 @@
 # process names shown in the picker as "no hooks" when they haven't reported
 # agents = claude codex gemini kimi opencode hermes aider cursor-agent copilot droid qwen grok pi amp
 
+# picker view on open: "status" (flat, needs-you first) or "session" (grouped by
+# session, alphabetical). ctrl-s switches while it's open.
+# view = status
+
 # picker popup size (columns/rows or %), and the preview's share of its height
 # popup_width = 100%
 # popup_height = 100%

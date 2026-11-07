@@ -109,6 +109,31 @@ nap 0.3
 screen | grep -q 'agent panes>' && fail "ctrl-q was swallowed during a reload"
 rm -f "$TMP/bin/ps"
 
+# ctrl-s switches views in the open picker; closing it goes back to the default.
+press C-b j
+appears 'agent panes>' || fail "popup did not reopen"
+screen | grep -q '[0-9] main ' && fail "session headings before switching"
+press C-s
+appears '[0-9] main ' || fail "ctrl-s did not switch to the session view"
+press C-s
+for _ in 1 2 3 4 5 6 7 8 9 10; do screen | grep -q '[0-9] main ' || break; nap 0.2; done
+screen | grep -q '[0-9] main ' && fail "ctrl-s did not switch back"
+press C-s
+appears '[0-9] main ' || fail "ctrl-s did not switch again"
+press Escape
+press C-b j
+appears 'agent panes>' || fail "popup did not reopen"
+screen | grep -q '[0-9] main ' && fail "closing the picker should reset the view"
+press Escape
+
+tmux set-option -g @agent_status_view session
+press C-b j
+appears '[0-9] main ' || fail "@agent_status_view did not set the default"
+press Enter
+nap 0.5
+screen | grep -q 'agent panes>' && fail "enter on a heading should jump"
+tmux set-option -gu @agent_status_view
+
 # An fzf without these flags must still get a working, static picker.
 real_fzf="$(command -v fzf)"
 cat > "$TMP/bin/fzf" <<FAKE

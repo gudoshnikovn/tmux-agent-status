@@ -482,6 +482,15 @@ rather than by version number, so an older fzf gets the static picker instead of
 failing silently. The loop also checks `kill -0 $$` because popup teardown can skip
 the EXIT trap.
 
+## Picker views
+
+`VIEWS` in `agent-picker.sh` lists them; `ctrl-s` cycles while the picker is open
+(state in a temp file, so reopening returns to `@agent_status_view`). To add one: put its
+name in `VIEWS`, write `render_<name>`, and add any reordering to `order_view`. fzf has no
+unselectable rows, so `session` view's headings are rows with target `=<first pane>`:
+Enter jumps there, ctrl-x skips them, and they count in the 1-9 numbering because `pos()`
+does. Pane rows repeat the session name, dimmed, because fzf can only search displayed text.
+
 ## The other presets
 
 **Kimi Code** (`hooks.map` derived from herdr's integration, then verified live

@@ -15,7 +15,7 @@ daemon or dashboard to live in.
  2 ⚙️ working  1s | api:1.1       [2/2] | server (kimi)
  3 ✅ done     2m | billing:1.1         | agent (opencode)
  4 💤 idle     1h | notes:1.1           | nvim (claude-personal)
- 5 ○ no hooks   - | scratch:1.1         | zsh (aider)
+ 5 ○ unknown   - | scratch:1.1         | zsh (aider)
 ```
 
 ## Why hooks, not screen scraping
@@ -35,7 +35,7 @@ you, additively, for every supported agent found on your machine.
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | [hooks](https://geminicli.com/docs/hooks/reference/) | install only: please report what you see |
 | [Codex CLI](https://github.com/openai/codex) | [hooks](https://developers.openai.com/codex/hooks); trust them once with `/hooks` | install only: please report what you see |
 
-Any other agent still appears in the picker as `○ no hooks`, found by its
+Any other agent still appears in the picker as `○ unknown`, found by its
 process name. A new agent with Claude-style JSON hooks takes one small table:
 see "Adding a new tool" below.
 
@@ -45,6 +45,9 @@ see "Adding a new tool" below.
   tmux sessions (via [`fzf`](https://github.com/junegunn/fzf)), needs-you first,
   with how long each status has held, why a pane is waiting, and a preview of
   the pane. Rows and preview update live while it's open, and rows keep their place until you reopen it. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
+- **Two views**: `ctrl-s` in the picker switches between the flat needs-you-first
+  list and one grouped by session, alphabetically, with a status rollup per session.
+  Set the default with `view`.
 - **Jump to the next one**: `prefix + J` goes to the pane that has waited
   longest, then panes you haven't looked at yet. Press again to cycle.
 - **Seen tracking**: a finished pane stays `✅ done` until you look at it, then
@@ -139,11 +142,12 @@ set -g @agent_status_notify_sound_file '/System/Library/Sounds/Glass.aiff'
 |---|---|---|---|
 | `pick_key` | `@agent_status_pick_key` | `j` | Key for `prefix + <key>` picker popup |
 | `next_key` | `@agent_status_next_key` | `J` | Key for `prefix + <key>` jump to the next pane needing you |
+| `view` | `@agent_status_view` | `status` | Picker view on open: `status` or `session` |
 | `popup_width` | `@agent_status_popup_width` | `100%` | Picker popup width |
 | `popup_height` | `@agent_status_popup_height` | `100%` | Picker popup height |
 | `preview_size` | `@agent_status_preview_size` | `75%` | Preview's share of the popup height |
 | `idle_after` | `@agent_status_idle_after` | `1440` | Minutes until an unvisited `done` pane goes `idle`; `0` to never |
-| `agents` | `@agent_status_agents` | common agent names | Space-separated process names shown as `○ no hooks` when they haven't reported |
+| `agents` | `@agent_status_agents` | common agent names | Space-separated process names shown as `○ unknown` when they haven't reported |
 | `summary` | `@agent_status_summary` | `on` | Status-right `⏳2 ⚙️1 ✅3` counter |
 | `summary_icon_waiting` | `@agent_status_summary_icon_waiting` | `⏳` | Counter prefix for waiting panes |
 | `summary_icon_working` | `@agent_status_summary_icon_working` | `⚙️` | Counter prefix for working panes |
