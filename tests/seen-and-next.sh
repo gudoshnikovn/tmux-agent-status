@@ -4,8 +4,8 @@
 set -euo pipefail
 
 ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-# shellcheck source=./lib-tmux.sh
-source "$ROOT/tests/lib-tmux.sh"
+# shellcheck source=./lib/tmux.sh
+source "$ROOT/tests/lib/tmux.sh"
 # shellcheck source=../core/agent-status-apply.sh
 source "$ROOT/core/agent-status-apply.sh"
 

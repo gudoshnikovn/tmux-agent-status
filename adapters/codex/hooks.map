@@ -1,0 +1,9 @@
+# https://developers.openai.com/codex/hooks
+# event            matcher  status
+UserPromptSubmit   -        working
+PreToolUse         -        working
+PermissionRequest  -        waiting
+PostToolUse        -        working
+Stop               -        done
+Interrupt          -        done
+SessionEnd         -        clear

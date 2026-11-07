@@ -1,0 +1,13 @@
+# AskUserQuestion needs you but isn't a permission prompt, so it's split off.
+# event             matcher                   status
+UserPromptSubmit    -                         working
+PreToolUse          ^(?!AskUserQuestion$).*$  working
+PreToolUse          ^AskUserQuestion$         waiting
+PostToolUse         ^AskUserQuestion$         working
+PostToolUseFailure  ^AskUserQuestion$         working
+SubagentStart       -                         working
+PreCompact          -                         working
+PermissionRequest   -                         waiting
+PermissionResult    -                         working
+Stop                -                         done
+Interrupt           -                         done

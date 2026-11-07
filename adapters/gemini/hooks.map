@@ -1,0 +1,8 @@
+# https://geminicli.com/docs/hooks/reference/
+# event        matcher         status
+BeforeAgent    -               working
+BeforeTool     -               working
+AfterTool      -               working
+Notification   ToolPermission  waiting
+AfterAgent     -               done
+SessionEnd     -               clear
