@@ -44,7 +44,7 @@ see "Adding a new tool" below.
 - **Picker**: `prefix + j` opens a popup with every agent pane across *all*
   tmux sessions (via [`fzf`](https://github.com/junegunn/fzf)), needs-you first,
   with how long each status has held, why a pane is waiting, and a preview of
-  the pane. Rows and preview refresh every second while it's open. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
+  the pane. Rows and preview update live while it's open, and rows keep their place until you reopen it. `tab` multi-selects and `ctrl-x` dismisses panes from the list.
 - **Jump to the next one**: `prefix + J` goes to the pane that has waited
   longest, then panes you haven't looked at yet. Press again to cycle.
 - **Seen tracking**: a finished pane stays `✅ done` until you look at it, then

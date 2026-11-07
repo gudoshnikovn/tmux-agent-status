@@ -461,13 +461,26 @@ Claude Code adapter's `jq`-missing path.
 
 ## Live picker
 
-While the popup is open, a background loop POSTs `reload-sync(...)+refresh-preview`
-to fzf once a second. The listener is a unix socket in a `mktemp -d` dir, not
-fzf's TCP port: anything reaching it can run commands through `execute`. `--id-nth=2
---track` keep the cursor and selection on the same pane when rows reorder. The flags
-are probed with `--filter` rather than by version number, so an older fzf
-gets the static picker instead of failing silently. The loop also checks `kill -0 $$`
-because popup teardown can skip the EXIT trap.
+While the popup is open, a background loop checks once a second and pokes fzf only
+if something changed: `reload-sync(...)+refresh-preview` when any pane's status does,
+`refresh-preview` when the previewed pane's text does. An unconditional one-second
+reload made the cursor twitch.
+
+**Don't use fzf's `--track` here.** It blocks all input during every reload while it
+looks for the tracked row (`+T*` in the info line), which ate arrow keys and `ctrl-q`.
+Instead rows keep the order they had when the popup opened (`--list <session> <order
+file>`), so the cursor stays put without tracking. New order on next open. `--id-nth=2`
+only carries multi-select across reloads. Age labels only move on a status change or
+`ctrl-r`.
+
+The preview command writes its target to a file, which is how the loop knows which
+pane is on show.
+
+The listener is a unix socket in a `mktemp -d` dir, not fzf's TCP port: anything
+reaching it can run commands through `execute`. The flags are probed with `--filter`
+rather than by version number, so an older fzf gets the static picker instead of
+failing silently. The loop also checks `kill -0 $$` because popup teardown can skip
+the EXIT trap.
 
 ## The other presets
 

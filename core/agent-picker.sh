@@ -28,6 +28,7 @@ running_agents() {
 
 list_panes() {
     local current_session="$1"
+    local order_file="${2:-}"
     local rows filtered rank sorted
     rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{?#{@agent_status_label},#{@agent_status_label},#{pane_current_command}}	#{@agent_status_seen}	#{@agent_status_message}	#{pane_tty}')"
 
@@ -44,6 +45,13 @@ list_panes() {
     # not looked at yet, then the rest; most-recently-changed first within each.
     rank='{ order = ($1 == "waiting") ? 0 : ($1 == "working") ? 1 : ($1 == "done" && $6 == "") ? 2 : ($1 == "done") ? 3 : 4; print order "\t" $0 }'
     sorted="$(printf '%s\n' "$filtered" | awk -F'\t' "$rank" | sort -t'	' -k1,1n -k3,3nr | cut -f2-)"
+
+    # While the picker is open rows keep their place, so they can't move under the
+    # cursor; new panes go last. fzf's --track would follow them instead, but it
+    # blocks all input during every reload.
+    if [ -n "$order_file" ]; then
+        sorted="$(printf '%s\n' "$sorted" | awk -F'\t' 'NR == FNR { place[$1] = FNR; next } { print (($3 in place) ? place[$3] : 999999) "\t" $0 }' "$order_file" - | sort -s -t'	' -k1,1n | cut -f2-)"
+    fi
 
     # Rows in the session we were invoked from get a green "→" marker
     # (ANSI, relies on --ansi in the fzf invocation below) so the
@@ -114,7 +122,7 @@ jump_next() {
 }
 
 if [ "${1:-}" = "--list" ]; then
-    list_panes "${2:-}"
+    list_panes "${2:-}" "${3:-}"
     exit 0
 fi
 
@@ -148,8 +156,16 @@ if [ -z "$formatted" ]; then
     exit 0
 fi
 
-# Display only, never parsed: drops trailing blank lines so "follow" lands on the prompt.
-preview="tmux capture-pane -ep -t {2} | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
+live_dir="$(mktemp -d)"
+trap 'rm -rf "$live_dir"; [ -z "${refresher:-}" ] || kill "$refresher" 2>/dev/null || true' EXIT
+
+order_file="$live_dir/order"
+printf '%s\n' "$formatted" | cut -f2 > "$order_file"
+list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_session' '$order_file'"
+
+# Display only, never parsed: drops trailing blank lines so "follow" lands on the
+# prompt. Noting the target tells the refresher below which pane is on show.
+preview="printf %s {2} > '$live_dir/focus'; tmux capture-pane -ep -t {2} | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
 preview_size="$(tmux show-option -gqv @agent_status_preview_size 2>/dev/null || true)"
 
 number_binds=""
@@ -157,24 +173,33 @@ for n in 1 2 3 4 5 6 7 8 9; do
     number_binds="$number_binds --bind $n:pos($n)+accept"
 done
 
-# Keep the preview and rows live by poking fzf once a second. A unix socket in a
-# private dir, because anyone reaching fzf's listener can make it run commands.
-# Older fzf lacks these flags, so ask it first and fall back to a static picker.
-live_dir="$(mktemp -d)"
+# Keep the open picker live: check once a second and poke fzf only when something
+# changed, since every reload redraws the list and can swallow a keypress. A unix
+# socket in a private dir, because anyone reaching fzf's listener can make it run
+# commands. Older fzf lacks these flags, so ask it first and fall back to static.
 live_sock="$live_dir/fzf.sock"
 live_args=()
-refresher=""
-trap 'rm -rf "$live_dir"; [ -z "$refresher" ] || kill "$refresher" 2>/dev/null || true' EXIT
 fzf_status=0
 fzf --listen="$live_sock" --id-nth=2 --filter=x </dev/null >/dev/null 2>&1 || fzf_status=$?
 if command -v curl >/dev/null 2>&1 && [ "$fzf_status" -ne 2 ]; then
-    live_args=(--listen="$live_sock" --id-nth=2 --track)
+    live_args=(--listen="$live_sock" --id-nth=2)
     (
+        rows_seen=""
+        view_seen=""
         # Popup teardown can skip the EXIT trap, so also stop when the picker is gone.
         while kill -0 "$$" 2>/dev/null; do
             sleep 1
-            curl -s --unix-socket "$live_sock" -X POST http://localhost \
-                -d "reload-sync($CURRENT_DIR/agent-picker.sh --list '$current_session')+refresh-preview" >/dev/null 2>&1 || true
+            rows="$(tmux list-panes -a -F '#{pane_id}:#{@agent_status}:#{@agent_status_seen}:#{@agent_status_message}' 2>/dev/null || true)"
+            view="$(tmux capture-pane -ep -t "$(cat "$live_dir/focus" 2>/dev/null || true)" 2>/dev/null | cksum || true)"
+            actions=""
+            if [ -n "$rows_seen" ] && [ "$rows" != "$rows_seen" ]; then
+                actions="reload-sync($list_cmd)+refresh-preview"
+            elif [ -n "$view_seen" ] && [ "$view" != "$view_seen" ]; then
+                actions="refresh-preview"
+            fi
+            rows_seen="$rows"
+            view_seen="$view"
+            [ -z "$actions" ] || curl -s --unix-socket "$live_sock" -X POST http://localhost -d "$actions" >/dev/null 2>&1 || true
         done
     ) </dev/null >/dev/null 2>&1 &
     refresher=$!
@@ -187,8 +212,8 @@ choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1
     --header=$'enter: jump | 1-9: jump to row | ctrl-j/k, ↓/↑: move | esc/ctrl-q: exit\ntab: select | ctrl-x: dismiss selected | ctrl-r: refresh' \
     --color='fg:-1,bg:-1,fg+:16:bold,bg+:117,hl:25,hl+:25:bold,info:25,prompt:25,pointer:196,marker:28,header:25,border:-1,label:-1' \
     $number_binds ${live_args[@]+"${live_args[@]}"} \
-    --bind "ctrl-r:reload($CURRENT_DIR/agent-picker.sh --list '$current_session')" \
-    --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($CURRENT_DIR/agent-picker.sh --list '$current_session')")" || exit 0 # Esc/ctrl-c (130) or no match (1) is a cancel, not an error
+    --bind "ctrl-r:reload($list_cmd)" \
+    --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($list_cmd)")" || exit 0 # Esc/ctrl-c (130) or no match (1) is a cancel, not an error
 
 [ -z "$choice" ] && exit 0
 
