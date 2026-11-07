@@ -18,6 +18,7 @@ core/
   agent-picker.sh          # prefix+j popup: lists panes, fzf-picks, jumps
   agent-status-summary.sh  # #() status-right widget: crash sweep + counts panes per state
   agent-status-seen.sh     # tmux focus hooks: marks a finished pane seen
+  picker-skip-heading.sh   # fzf transform: keeps the cursor off session headings
   install-json-hooks.sh    # shared installer: hooks.map -> Claude-style JSON hook config
   load-config.sh           # fills @agent_status_* defaults from ~/.config/tmux-agent-status/config
 adapters/
@@ -487,11 +488,13 @@ the EXIT trap.
 `VIEWS` in `agent-picker.sh` lists them; `ctrl-s` cycles while the picker is open
 (state in a temp file, so reopening returns to `@agent_status_view`). To add one: put its
 name in `VIEWS`, write `render_<name>`, and add any reordering to `order_view`. fzf has no
-unselectable rows, so a `session` heading is the first line of its session's first pane
-item (`--read0`, RS in `--list` output becomes the item's inner newline). The cursor and
-1-9 therefore only ever see panes, and `pos()` lines up with the numbers. Don't make
-headings separate rows: they'd take cursor stops and numbers. Pane rows repeat the session
-name, dimmed, because fzf can only search displayed text.
+unselectable rows, so a `session` heading is a row with target `=<first pane>`, and on
+every `focus` and `load` event `core/picker-skip-heading.sh` moves the cursor off it in the
+direction of travel. Don't turn headings into the first line of a multi-line `--read0`
+item: tried, and fzf highlights the whole item, title included. Only panes get numbers,
+so the 1-9 keys look up their list position in `<view file>.positions`, which every
+`--list` rewrites. Headings still count in fzf's own `N/M` info. Pane rows repeat the
+session name, dimmed, because fzf can only search displayed text.
 
 Icons live in `agent_status_load_icons` (`@agent_status_icons`, `minimal` by default). Keep
 a theme's icons one width, or picker columns drift. The counter deliberately shows only

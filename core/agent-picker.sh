@@ -106,15 +106,16 @@ render_status() {
 }
 
 # A heading per session, then its panes. fzf has no unselectable rows, so a heading
-# is the first line of its session's first pane (RS, \036, becomes the newline inside
-# a --read0 item): the cursor and 1-9 only ever see panes. Pane rows repeat the
-# session name, dimmed, so searching by session still finds them.
+# is a row with target "=<first pane>" that picker-skip-heading.sh keeps the cursor
+# off, and only panes get numbers. Pane rows repeat the session name, dimmed, so
+# searching by session still finds them.
 render_session() {
     render_awk "$1" '
     {
         line[NR] = $0; s = $3; sub(/:.*/, "", s); sess[NR] = s;
         p = $3; sub(/^[^:]*:/, "", p); pane[NR] = p;
         if (length(p) > pane_w) pane_w = length(p);
+        if (!(s in first)) first[s] = $3;
         if ($1 == "done" && $6 != "") key = "idle"; else key = $1;
         count[s, key]++;
     }
@@ -134,7 +135,7 @@ render_session() {
             s = sess[n];
             if (s != prev) {
                 marker = (s == cur) ? "\033[1;32m→\033[0m" : " ";
-                printf "%s \033[1m%s\033[0m%s\036", marker, s, rollup(s);
+                printf "%s \033[1m%s\033[0m%s\t=%s\n", marker, s, rollup(s), first[s];
                 prev = s;
             }
             set_status_cell(f[1], f[6]);
@@ -148,7 +149,8 @@ list_panes() {
     local current_session="$1"
     local order_file="${2:-}"
     local view="${3:-}"
-    local rows filtered rank sorted
+    local positions_file="${4:-}"
+    local rows filtered rank sorted out
     [ -n "$view" ] || view="$(configured_view)"
     rows="$(tmux list-panes -a -F '#{@agent_status}	#{@agent_status_updated_at}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{?#{@agent_status_label},#{@agent_status_label},#{pane_current_command}}	#{@agent_status_seen}	#{@agent_status_message}	#{pane_tty}	#{@agent_status_tool}')"
 
@@ -174,7 +176,10 @@ list_panes() {
         sorted="$(printf '%s\n' "$sorted" | awk -F'\t' 'NR == FNR { place[$1] = FNR; next } { print (($3 in place) ? place[$3] : 999999) "\t" $0 }' "$order_file" - | sort -s -t'	' -k1,1n | cut -f2-)"
     fi
 
-    printf '%s\n' "$sorted" | order_view "$view" | "render_$view" "$current_session"
+    out="$(printf '%s\n' "$sorted" | order_view "$view" | "render_$view" "$current_session")"
+    # Which list position the Nth numbered row sits at, for the 1-9 keys.
+    [ -z "$positions_file" ] || printf '%s\n' "$out" | awk -F'\t' '$2 !~ /^=/ { print NR }' > "$positions_file"
+    printf '%s\n' "$out"
 }
 
 jump_to() {
@@ -204,7 +209,7 @@ jump_next() {
 }
 
 if [ "${1:-}" = "--list" ]; then
-    list_panes "${2:-}" "${3:-}" "$(cat "${4:-/dev/null}" 2>/dev/null || true)"
+    list_panes "${2:-}" "${3:-}" "$(cat "${4:-/dev/null}" 2>/dev/null || true)" "${4:+$4.positions}"
     exit 0
 fi
 
@@ -226,6 +231,7 @@ fi
 if [ "${1:-}" = "--dismiss" ]; then
     shift
     for target in "$@"; do
+        case "$target" in =*) continue ;; esac # a session heading, not a pane
         agent_status_apply_to_tmux "$target" "" "" >/dev/null 2>&1 || true
     done
     exit 0
@@ -253,20 +259,19 @@ order_file="$live_dir/order"
 printf '%s\n' "$formatted" | cut -f2 > "$order_file"
 view_file="$live_dir/view"
 configured_view > "$view_file"
-# fzf reads NUL-separated items, so a session heading can share its pane's item.
-to_items="tr '\\n\\036' '\\000\\n'"
-list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_session' '$order_file' '$view_file' | $to_items"
-formatted="$(list_panes "$current_session" "$order_file" "$(cat "$view_file")")"
+list_cmd="$CURRENT_DIR/agent-picker.sh --list '$current_session' '$order_file' '$view_file'"
+formatted="$(list_panes "$current_session" "$order_file" "$(cat "$view_file")" "$view_file.positions")"
 
 # Display only, never parsed: drops trailing blank lines so "follow" lands on the
 # prompt. Noting the target tells the refresher below which pane is on show.
-preview="printf %s {2} > '$live_dir/focus'; tmux capture-pane -ep -t {2} | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
+preview="target={2}; target=\"\${target#=}\"; printf %s \"\$target\" > '$live_dir/focus'; tmux capture-pane -ep -t \"\$target\" | awk 'NF { last = NR } { line[NR] = \$0 } END { for (i = 1; i <= last; i++) print line[i] }' | tail -n 300"
 preview_size="$(tmux show-option -gqv @agent_status_preview_size 2>/dev/null || true)"
 
-number_binds=""
+number_binds=()
 for n in 1 2 3 4 5 6 7 8 9; do
-    number_binds="$number_binds --bind $n:pos($n)+accept"
+    number_binds+=(--bind "$n:transform(awk 'NR == $n { print \"pos(\" \$0 \")\" }' '$view_file.positions')+accept")
 done
+skip_heading="$CURRENT_DIR/picker-skip-heading.sh {n} {2} '$live_dir/last-pane'"
 
 # Keep the open picker live: check once a second and poke fzf only when something
 # changed, since every reload redraws the list and can swallow a keypress. A unix
@@ -300,18 +305,18 @@ if command -v curl >/dev/null 2>&1 && [ "$fzf_status" -ne 2 ]; then
     refresher=$!
 fi
 
-# shellcheck disable=SC2086
-choice="$(printf '%s\n' "$formatted" | eval "$to_items" | fzf --read0 --multi --delimiter='\t' --with-nth=1 --ansi \
+choice="$(printf '%s\n' "$formatted" | fzf --multi --delimiter='\t' --with-nth=1 --ansi \
     --prompt="agent panes> " --reverse \
     --preview="$preview" --preview-window="down:${preview_size:-75%}:follow:border-top" \
     --header=$'enter: jump | 1-9: jump to row | ctrl-j/k, ↓/↑: move | esc/ctrl-q: exit\ntab: select | ctrl-x: dismiss selected | ctrl-r: refresh | ctrl-s: switch view' \
     --color='fg:-1,bg:-1,fg+:16:bold,bg+:117,hl:25,hl+:25:bold,info:25,prompt:25,pointer:196,marker:28,header:25,border:-1,label:-1' \
-    $number_binds ${live_args[@]+"${live_args[@]}"} \
+    "${number_binds[@]}" ${live_args[@]+"${live_args[@]}"} \
+    --bind "focus:transform($skip_heading)" --bind "load:transform($skip_heading)" \
     --bind "ctrl-r:reload($list_cmd)" \
     --bind "ctrl-s:execute-silent($CURRENT_DIR/agent-picker.sh --next-view '$view_file')+reload-sync($list_cmd)+first" \
     --bind "ctrl-x:execute-silent($CURRENT_DIR/agent-picker.sh --dismiss {+2})+reload($list_cmd)")" || exit 0 # Esc/ctrl-c (130) or no match (1) is a cancel, not an error
 
 [ -z "$choice" ] && exit 0
 
-target="$(printf '%s' "$choice" | awk -F'\t' 'NF > 1 { print $2 }')"
-jump_to "$target"
+target="$(printf '%s' "$choice" | awk -F'\t' '{ print $2 }')"
+jump_to "${target#=}"

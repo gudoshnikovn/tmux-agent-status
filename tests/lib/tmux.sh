@@ -2,6 +2,8 @@
 # nothing reaches the user's server. `tmux` on PATH points at the private one;
 # HOME is throwaway because loading the plugin installs adapter hooks.
 TMP="$(mktemp -d)"
+# Pickers under test get their sockets in here, which tells them from a real popup.
+export TMPDIR="$TMP"
 REAL_TMUX="$(command -v tmux)"
 SOCKET="agentstatus-test-$$"
 cleanup() { "$REAL_TMUX" -L "$SOCKET" kill-server 2>/dev/null || true; "$REAL_TMUX" -L "$SOCKET-outer" kill-server 2>/dev/null || true; rm -rf "$TMP"; }

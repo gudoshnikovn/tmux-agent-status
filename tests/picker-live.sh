@@ -53,8 +53,8 @@ press Enter
 nap 0.5
 [ "$(tmux display-message -p '#{window_name}')" = second ] || fail "cursor moved off its pane when rows reordered"
 
-# Only this server's pickers: the user's own popup may be open on the real server.
-leftovers() { ps -axo pid=,etime=,args= | grep "[f]zf.sock" | grep "$ROOT" || true; }
+# Only this test's pickers: the user's own popup may be open on the real server.
+leftovers() { ps -axo pid=,etime=,args= | grep "[f]zf.sock" | grep "$TMP" || true; }
 for i in 1 2 3 4 5 6 7 8 9 10; do
     [ -z "$(leftovers)" ] && break
     echo "t+$i: $(leftovers | cut -c1-170)"
@@ -127,25 +127,60 @@ appears 'agent panes>' || fail "popup did not reopen"
 screen | grep -q "$heading" && fail "closing the picker should reset the view"
 press Escape
 
-# Grouped: the cursor and 1-9 reach panes only, whichever pane is first or second.
+# Grouped: the cursor and 1-9 reach panes only, in both directions, and the
+# highlight stays off headings. Rows: aaa heading, a, main heading, then two panes.
+tmux new-session -d -s aaa
+a_pane="$(tmux display-message -p -t aaa '#{pane_id}')"
+agent_status_apply_to_tmux "$a_pane" working "" ""
 tmux set-option -g @agent_status_view session
-press C-b j
-appears "$heading" || fail "@agent_status_view did not set the default"
-press Enter
-nap 0.5
-first_pane="$(tmux display-message -p '#{pane_id}')"
-press C-b j
-appears "$heading" || fail "popup did not reopen"
+current() { tmux display-message -p '#{pane_id}'; }
+back_home() { tmux switch-client -t main; tmux select-window -t main:0; nap 0.2; }
+open() { press C-b j; appears "$heading" || fail "grouped popup did not open"; nap 0.3; }
+pick() { press Enter; nap 0.5; current; back_home; }
+second_row="$b"; third_row="$c"
+# Same status in main; which sorts first depends on age, so read it from the list.
+echo session > "$TMP/view"
+first_main="$("$ROOT/core/agent-picker.sh" --list main "" "$TMP/view" | awk -F'\t' '$2 ~ /^main:/ { print $2; exit }')"
+first_main_id="$(tmux display-message -p -t "$first_main" '#{pane_id}')"
+if [ "$first_main_id" = "$c" ]; then second_row="$c"; third_row="$b"; fi
+
+open
+screen_e() { "${outer[@]}" capture-pane -ep; }
+screen_e | grep 'aaa' | head -1 | grep -q '48;5;117' && fail "highlight spilled onto the first heading"
+[ "$(pick)" = "$a_pane" ] || fail "cursor should start on the first pane, not its heading"
+
+open
 press C-j
-press Enter
+screen_e | grep '→.*main' | head -1 | grep -q '48;5;117' && fail "highlight spilled onto the heading of the selected pane"
+[ "$(pick)" = "$second_row" ] || fail "ctrl-j should cross the heading to the next session's pane"
+
+open
+press C-j
+press C-j
+press C-k
+press C-k
+[ "$(pick)" = "$a_pane" ] || fail "ctrl-k should cross the heading back"
+
+open
+press C-k
+[ "$(pick)" = "$a_pane" ] || fail "ctrl-k at the top should stay on the first pane"
+
+open
+"${outer[@]}" send-keys C-j C-j
 nap 0.5
-second_pane="$(tmux display-message -p '#{pane_id}')"
-[ "$first_pane" != "$second_pane" ] || fail "one ctrl-j should land on the next pane, not a heading"
-press C-b j
-appears "$heading" || fail "popup did not reopen"
+[ "$(pick)" = "$third_row" ] || fail "a burst of ctrl-j should count each pane once"
+
+open
 press 2
 nap 0.5
-[ "$(tmux display-message -p '#{pane_id}')" = "$second_pane" ] || fail "2 should go to the second pane"
+[ "$(current)" = "$second_row" ] || fail "2 should go to the second pane"
+back_home
+
+open
+press 3
+nap 0.5
+[ "$(current)" = "$third_row" ] || fail "3 should go to the third pane"
+back_home
 tmux set-option -gu @agent_status_view
 
 # An fzf without these flags must still get a working, static picker.
