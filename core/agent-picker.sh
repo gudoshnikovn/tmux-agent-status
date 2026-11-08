@@ -68,6 +68,11 @@ function age(updated, d) {
     if (d < 86400) return int(d / 3600) "h";
     return int(d / 86400) "d";
 }
+# Why the pane is in this state, in colour and undimmed (22): on an idle row it is
+# the one part still worth reading, e.g. a background shell it waits on.
+function reason(msg) {
+    return (msg != "") ? " · \033[22;36m" msg "\033[0m" : "";
+}
 function set_status_cell(status, seen) {
     dim = "";
     if (status == "waiting")      cell = sprintf("%s %-7s", i_waiting, "waiting");
@@ -100,7 +105,7 @@ render_status() {
             set_status_cell(f[1], f[6]);
             num = (n <= 9) ? n : " ";
             marker = (f[3] == cur) ? "\033[1;32m→\033[0m" : " ";
-            why = (f[7] != "") ? " · " f[7] : "";
+            why = reason(f[7]);
             printf fmt, marker, dim, num, cell, age(f[2]), f[3], badge[n], f[4], f[5], why, (dim != "") ? "\033[0m" : "", f[3];
         }
     }'
@@ -139,7 +144,7 @@ render_session() {
                 prev = s;
             }
             set_status_cell(f[1], f[6]);
-            why = (f[7] != "") ? " · " f[7] : "";
+            why = reason(f[7]);
             marker = (f[3] == cur) ? "\033[1;32m→\033[0m" : " ";
             printf fmt, marker, dim, (n <= 9) ? n : " ", cell, age(f[2]), pane[n], f[4], f[5], why, (dim != "") ? "\033[0m" : "", f[3];
         }

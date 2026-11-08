@@ -47,7 +47,7 @@ case "$order" in
     "ask busy busy fresh seen "*|"ask busy fresh busy seen "*) ;;
     *) fail "wrong order: $order" ;;
 esac
-printf '%s\n' "$out" | grep -q 'ask:1.1.* · permission: Bash' || fail "message missing"
+printf '%s\n' "$out" | grep -q 'ask:1.1.* · .*permission: Bash' || fail "message missing"
 printf '%s\n' "$out" | grep -q '· idle .*seen:1.1' || fail "seen pane not shown as idle"
 printf '%s\n' "$out" | grep -q '✓ done .*fresh:1.1' || fail "unseen pane not shown as done"
 printf '%s\n' "$out" | grep -q '? unknown.*nohook:1.1.*(opencode)' || fail "agent without hooks missing"
