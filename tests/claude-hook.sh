@@ -31,8 +31,14 @@ check() { # name mapped-status payload pane-status pane-message expected-line-su
 line() { printf 'status=%s tool=claude-code label= message=%s' "$1" "${2:-}"; }
 
 check "plain stop" done '{"hook_event_name":"Stop","background_tasks":[]}' working "" "$(line done)"
-check "background shell still ends the turn" done \
-    '{"hook_event_name":"Stop","background_tasks":[{"type":"shell","status":"running"}]}' working "" "$(line done)"
+check "background shell ends the turn but is named" done \
+    '{"hook_event_name":"Stop","background_tasks":[{"type":"shell","status":"running","description":"gh run\nwatch"},{"type":"shell","status":"completed","description":"x"}]}' \
+    working "" "$(line done "bg shell: gh run watch")"
+check "two background tasks" done \
+    '{"hook_event_name":"Stop","background_tasks":[{"type":"shell","status":"running","description":"a"},{"type":"monitor","status":"running","description":"b"}]}' \
+    working "" "$(line done "bg shell: a; monitor: b")"
+check "idle_prompt keeps the background note" done '{"hook_event_name":"Notification"}' done "bg shell: a" ""
+check "idle_prompt still heals an interrupt" done '{"hook_event_name":"Notification"}' working "" "$(line done)"
 check "background subagent keeps it working" done \
     '{"hook_event_name":"Stop","background_tasks":[{"type":"subagent","status":"running"}]}' working "" "$(line working)"
 check "finished subagent does not" done \

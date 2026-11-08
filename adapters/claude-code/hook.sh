@@ -13,16 +13,31 @@ shift || true
 
 sep=$'\x1f'
 # Without jq every field stays empty and the status passes through unchanged.
-IFS="$sep" read -r event agent tool running_workers < <(jq -r '
-    [.hook_event_name // "", .agent_id // "", .tool_name // "",
-     ([.background_tasks[]? | select(.status == "running" and (.type == "subagent" or .type == "workflow"))] | length)]
-    | map(tostring) | join("\u001f")' 2>/dev/null)
+IFS="$sep" read -r event agent tool running_workers background < <(jq -r '
+    [.background_tasks[]? | select(.status == "running")] as $running
+    | [.hook_event_name // "", .agent_id // "", .tool_name // "",
+       ([$running[] | select(.type == "subagent" or .type == "workflow")] | length),
+       ([$running[] | select(.type != "subagent" and .type != "workflow")
+         | "\(.type): \(.description // "")"] | join("; "))]
+    | map(tostring | gsub("[\\n\\t\u001f]+"; " ")) | join("\u001f")' 2>/dev/null)
 
 message=""
 case "${event:-}" in
     # A background subagent wakes this session when it ends, so the turn isn't
-    # really over. Background shells stay "done": a dev server never ends.
-    Stop) [ "${running_workers:-0}" -gt 0 ] && status="working" ;;
+    # really over. Background shells stay "done", since a dev server never ends,
+    # but are named so the row shows the agent is still waiting on something.
+    Stop)
+        if [ "${running_workers:-0}" -gt 0 ]; then
+            status="working"
+        elif [ -n "${background:-}" ]; then
+            message="bg $background"
+        fi
+        ;;
+    # Only Stop lists background tasks, so a later idle_prompt on a finished pane
+    # would just wipe that note. On a stuck "working" (an interrupt) it still heals.
+    Notification)
+        [ "$(tmux show-option -p -qv -t "${TMUX_PANE:-}" @agent_status 2>/dev/null)" = "done" ] && exit 0
+        ;;
     PermissionRequest) message="permission: ${tool:-}" ;;
     Elicitation) message="input requested" ;;
 esac

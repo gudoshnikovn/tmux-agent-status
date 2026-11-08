@@ -239,9 +239,12 @@ logging every event (2026-11-07):
   the session wakes itself when it ends, so a plain `Stop -> done` announced
   `done` twice with `working` in between. With a running `subagent` or
   `workflow` in `background_tasks`, `Stop` stays `working` (`idle_prompt`
-  still heals it if the task hangs). Background `shell` tasks deliberately
-  still end the turn: a dev server never finishes, and the pane would read
-  `working` forever.
+  still heals it if the task hangs). Background `shell` (and `monitor`) tasks
+  deliberately still end the turn: a dev server never finishes, and the pane
+  would read `working` forever. They go in the message instead
+  (`bg shell: <description>`), so the row reads "done/idle, but still waiting
+  on something". Only `Stop` carries `background_tasks`, so `idle_prompt` on an
+  already-`done` pane is dropped rather than allowed to wipe that message.
 - **Subagent tool events.** They carry `agent_id` and arrive after the main
   turn's `Stop` and during its permission prompts. They're dropped unless the
   pane is on a prompt that a subagent raised (marked by the `subagent ` message
